@@ -6,4 +6,11 @@ export { closeDatabase } from "./instance.ts";
 export { connectDatabase } from "./client.ts";
 export type { ConnectDatabaseOptions, Database } from "./client.ts";
 export * from "./queries/index.ts";
-export type { Account, NewAccount, NewProject, Project } from "./schema/index.ts";
+export type {
+  Account,
+  FeatureFlag,
+  NewAccount,
+  NewFeatureFlag,
+  NewProject,
+  Project,
+} from "./schema/index.ts";
