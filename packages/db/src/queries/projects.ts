@@ -15,6 +15,16 @@ export async function insertProject(input: InsertProjectInput): Promise<Project>
   return project!;
 }
 
+/** Look a project up by the public part of its API key. */
+export async function findProjectByApiKeyId(apiKeyId: string): Promise<Project | undefined> {
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.apiKeyId, apiKeyId))
+    .limit(1);
+  return project;
+}
+
 /** One page of an account's projects, newest first (ids are time-ordered UUIDv7). */
 export async function listProjectsByAccountId(
   accountId: string,
