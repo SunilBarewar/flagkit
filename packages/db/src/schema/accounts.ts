@@ -6,7 +6,6 @@ export const accounts = pgTable("accounts", {
   id: id(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  apiKeyHash: text("api_key_hash").unique(),
   ...timestamps,
 });
 

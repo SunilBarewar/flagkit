@@ -48,13 +48,3 @@ export async function deleteAccount(id: string): Promise<boolean> {
     .returning({ id: accounts.id });
   return deleted.length > 0;
 }
-
-/** Store the (already hashed) API key. Returns false if the account doesn't exist. */
-export async function setAccountApiKeyHash(id: string, apiKeyHash: string): Promise<boolean> {
-  const updated = await db
-    .update(accounts)
-    .set({ apiKeyHash })
-    .where(eq(accounts.id, id))
-    .returning({ id: accounts.id });
-  return updated.length > 0;
-}
