@@ -1,5 +1,6 @@
 import { ErrorCode } from "../constants/error-codes.ts";
 import { HttpStatus } from "../constants/http-status.ts";
+import type { ApiErrorResponse } from "../schemas/response.ts";
 
 export interface AppErrorOptions {
   /** Machine-readable error code, e.g. "EMAIL_ALREADY_EXISTS". */
@@ -31,12 +32,14 @@ export class AppError extends Error {
     this.details = details;
   }
 
-  toJSON() {
+  /** The API error envelope: `{ message, error: { code, details? } }`. */
+  toJSON(): ApiErrorResponse {
     return {
-      error: this.name,
-      code: this.code,
       message: this.message,
-      ...(this.details !== undefined && { details: this.details }),
+      error: {
+        code: this.code,
+        ...(this.details !== undefined && { details: this.details }),
+      },
     };
   }
 }
