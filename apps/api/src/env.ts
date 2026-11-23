@@ -6,6 +6,7 @@ const schema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32),
+  API_KEY_PEPPER: z.string().min(32),
 });
 
 export const Config = schema.parse(process.env);
