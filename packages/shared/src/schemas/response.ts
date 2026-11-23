@@ -19,6 +19,16 @@ export const PaginationMeta = z.object({
 });
 export type PaginationMeta = z.infer<typeof PaginationMeta>;
 
+export const DEFAULT_PAGE_LIMIT = 20;
+export const MAX_PAGE_LIMIT = 100;
+
+/** Querystring for any paginated list route: `?page=2&limit=50`. */
+export const PaginationQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(DEFAULT_PAGE_LIMIT),
+});
+export type PaginationQuery = z.infer<typeof PaginationQuery>;
+
 /** Wrap a data schema in the success envelope: `apiSuccessSchema(ProjectResponse)`. */
 export const apiSuccessSchema = <T extends z.ZodType>(data: T) =>
   z.object({ message: z.string(), data });

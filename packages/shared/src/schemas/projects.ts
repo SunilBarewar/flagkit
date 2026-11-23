@@ -22,8 +22,3 @@ export const CreateProjectResponse = z.object({
   apiKey: z.string(),
 });
 export type CreateProjectResponse = z.infer<typeof CreateProjectResponse>;
-
-export const ListProjectsResponse = z.object({
-  projects: z.array(ProjectResponse),
-});
-export type ListProjectsResponse = z.infer<typeof ListProjectsResponse>;

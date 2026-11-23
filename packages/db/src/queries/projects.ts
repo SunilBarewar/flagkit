@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 
 import { db } from "../instance.ts";
 import { projects, type NewProject, type Project } from "../schema/index.ts";
@@ -15,11 +15,25 @@ export async function insertProject(input: InsertProjectInput): Promise<Project>
   return project!;
 }
 
-/** All projects owned by an account, newest first. */
-export async function listProjectsByAccountId(accountId: string): Promise<Project[]> {
+/** One page of an account's projects, newest first (ids are time-ordered UUIDv7). */
+export async function listProjectsByAccountId(
+  accountId: string,
+  { limit, offset }: { limit: number; offset: number },
+): Promise<Project[]> {
   return db
     .select()
     .from(projects)
     .where(eq(projects.accountId, accountId))
-    .orderBy(desc(projects.id));
+    .orderBy(desc(projects.id))
+    .limit(limit)
+    .offset(offset);
+}
+
+/** Total number of projects an account owns, for pagination. */
+export async function countProjectsByAccountId(accountId: string): Promise<number> {
+  const [row] = await db
+    .select({ total: count() })
+    .from(projects)
+    .where(eq(projects.accountId, accountId));
+  return row!.total;
 }
