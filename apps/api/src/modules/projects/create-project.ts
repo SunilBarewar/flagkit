@@ -1,10 +1,11 @@
 import { insertProject } from "@flagkit/db";
 import { HttpStatus } from "@flagkit/shared";
+import { CreateProjectBody, CreateProjectResponse, ErrorResponse } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-import { ErrorResponse, security } from "@/common/responses.ts";
+import { security } from "@/common/responses.ts";
 import { generateApiKey } from "@/lib/api-key.ts";
-import { CreateProjectBody, CreateProjectResponse, toProjectResponse } from "./schemas.ts";
+import { toProjectResponse } from "./mappers.ts";
 
 export const createProjectRoute: FastifyPluginAsyncZod = async (app) => {
   app.post(

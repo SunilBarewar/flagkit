@@ -1,10 +1,16 @@
 import { updateAccount } from "@flagkit/db";
 import { ErrorCode, HttpStatus, NotFoundError } from "@flagkit/shared";
+import {
+  AccountResponse,
+  ErrorResponse,
+  IdParams,
+  UpdateAccountBody,
+} from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-import { ErrorResponse, protectedErrorResponses, security } from "@/common/responses.ts";
+import { protectedErrorResponses, security } from "@/common/responses.ts";
 import { hashPassword } from "@/lib/password.ts";
-import { AccountResponse, IdParams, UpdateAccountBody, toAccountResponse } from "./schemas.ts";
+import { toAccountResponse } from "./mappers.ts";
 
 export const updateAccountRoute: FastifyPluginAsyncZod = async (app) => {
   app.patch(

@@ -1,11 +1,10 @@
 import { findAccountByEmail, insertAccount } from "@flagkit/db";
 import { ConflictError, ErrorCode, HttpStatus } from "@flagkit/shared";
+import { AuthResponse, CredentialsBody, ErrorResponse } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-import { ErrorResponse } from "@/common/responses.ts";
 import { signAccountToken } from "@/lib/jwt.ts";
 import { hashPassword } from "@/lib/password.ts";
-import { AuthResponse, CredentialsBody } from "./schemas.ts";
 
 export const createAccountRoute: FastifyPluginAsyncZod = async (app) => {
   app.post(

@@ -1,9 +1,9 @@
 import { deleteAccount } from "@flagkit/db";
 import { ErrorCode, HttpStatus, NotFoundError } from "@flagkit/shared";
+import { IdParams, MessageResponse } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-import { MessageResponse, protectedErrorResponses, security } from "@/common/responses.ts";
-import { IdParams } from "./schemas.ts";
+import { protectedErrorResponses, security } from "@/common/responses.ts";
 
 export const deleteAccountRoute: FastifyPluginAsyncZod = async (app) => {
   app.delete(

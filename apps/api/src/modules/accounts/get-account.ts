@@ -1,9 +1,10 @@
 import { findAccountById } from "@flagkit/db";
 import { ErrorCode, HttpStatus, NotFoundError } from "@flagkit/shared";
+import { AccountResponse, IdParams } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { protectedErrorResponses, security } from "@/common/responses.ts";
-import { AccountResponse, IdParams, toAccountResponse } from "./schemas.ts";
+import { toAccountResponse } from "./mappers.ts";
 
 export const getAccountRoute: FastifyPluginAsyncZod = async (app) => {
   app.get(

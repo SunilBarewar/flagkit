@@ -1,11 +1,10 @@
 import { findAccountByEmail } from "@flagkit/db";
 import { ErrorCode, HttpStatus, UnauthorizedError } from "@flagkit/shared";
 import bcrypt from "bcrypt";
+import { AuthResponse, CredentialsBody, ErrorResponse } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-import { ErrorResponse } from "@/common/responses.ts";
 import { signAccountToken } from "@/lib/jwt.ts";
-import { AuthResponse, CredentialsBody } from "./schemas.ts";
 
 // Compared against when the email is unknown so response time doesn't reveal which emails exist.
 const DUMMY_HASH = bcrypt.hashSync("flagkit-dummy-password", 10);

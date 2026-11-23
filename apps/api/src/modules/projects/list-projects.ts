@@ -1,9 +1,10 @@
 import { listProjectsByAccountId } from "@flagkit/db";
 import { HttpStatus } from "@flagkit/shared";
+import { ErrorResponse, ListProjectsResponse } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-import { ErrorResponse, security } from "@/common/responses.ts";
-import { ListProjectsResponse, toProjectResponse } from "./schemas.ts";
+import { security } from "@/common/responses.ts";
+import { toProjectResponse } from "./mappers.ts";
 
 export const listProjectsRoute: FastifyPluginAsyncZod = async (app) => {
   app.get(
