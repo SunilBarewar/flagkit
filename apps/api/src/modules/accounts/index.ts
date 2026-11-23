@@ -5,17 +5,19 @@ import { createAccountRoute } from "./create-account.ts";
 import { deleteAccountRoute } from "./delete-account.ts";
 import { getAccountRoute } from "./get-account.ts";
 import { loginRoute } from "./login.ts";
+import { logoutRoute } from "./logout.ts";
 import { updateAccountRoute } from "./update-account.ts";
 
-/** Signup and login: no token needed. */
+/** Signup, login and logout: no session needed. */
 export const accountPublicRoutes: FastifyPluginAsyncZod = async (app) => {
   app.register(createAccountRoute);
   app.register(loginRoute);
+  app.register(logoutRoute);
 };
 
 /**
  * Routes on a specific account. Registered inside the shared protected scope
- * (see modules/index.ts), so a valid JWT is already guaranteed here.
+ * (see modules/index.ts), so a valid session is already guaranteed here.
  */
 export const accountProtectedRoutes: FastifyPluginAsyncZod = async (app) => {
   // Authorization: an account may only act on itself. Runs after params validation.
