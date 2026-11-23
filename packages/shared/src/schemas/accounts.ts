@@ -7,14 +7,7 @@ export const CredentialsBody = z.object({
 });
 export type CredentialsBody = z.infer<typeof CredentialsBody>;
 
-/** Data returned when creating an account or logging in. */
-export const AuthResponse = z.object({
-  email: z.email(),
-  token: z.string(),
-});
-export type AuthResponse = z.infer<typeof AuthResponse>;
-
-/** Never includes the password hash. */
+/** Never includes the password hash. Also the data returned by signup and login. */
 export const AccountResponse = z.object({
   id: z.uuid(),
   email: z.email(),

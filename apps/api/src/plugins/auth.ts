@@ -4,34 +4,30 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
 import { hashApiKey, parseApiKeyId, verifyApiKey } from "@/lib/api-key.ts";
+import { AUTH_COOKIE_NAME } from "@/lib/auth-cookie.ts";
 import { verifyAccountToken } from "@/lib/jwt.ts";
 
-const BEARER_PREFIX = "Bearer ";
 const API_KEY_HEADER = "x-api-key";
 
 // Compared against when the key is malformed or unknown so response time doesn't reveal which keys exist.
 const DUMMY_API_KEY_HASH = hashApiKey("flagkit-dummy-api-key");
 
 /**
- * Verifies the `Authorization: Bearer <token>` header and returns the account id.
- * Throws UnauthorizedError (-> 401 via the global error handler) if the header is
- * missing/malformed or the token is invalid/expired.
+ * Verifies the session cookie and returns the account id.
+ * Throws UnauthorizedError (-> 401 via the global error handler) if the cookie is
+ * missing or the token is invalid/expired.
  */
 async function getAccountId(request: FastifyRequest): Promise<string> {
-  const header = request.headers.authorization;
+  const token = request.cookies[AUTH_COOKIE_NAME];
 
-  if (!header?.startsWith(BEARER_PREFIX)) {
-    throw new UnauthorizedError("Missing or malformed Authorization header", {
-      code: ErrorCode.UNAUTHORIZED,
-    });
+  if (!token) {
+    throw new UnauthorizedError("Not authenticated", { code: ErrorCode.UNAUTHORIZED });
   }
-
-  const token = header.slice(BEARER_PREFIX.length).trim();
 
   try {
     return await verifyAccountToken(token);
   } catch (cause) {
-    throw new UnauthorizedError("Invalid or expired token", {
+    throw new UnauthorizedError("Invalid or expired session", {
       code: ErrorCode.UNAUTHORIZED,
       cause,
     });

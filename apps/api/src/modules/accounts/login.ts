@@ -2,15 +2,17 @@ import { findAccountByEmail } from "@flagkit/db";
 import { ErrorCode, HttpStatus, UnauthorizedError } from "@flagkit/shared";
 import bcrypt from "bcrypt";
 import {
+  AccountResponse,
   ApiErrorResponse,
-  AuthResponse,
   CredentialsBody,
   apiSuccessSchema,
 } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
+import { setAuthCookie } from "@/lib/auth-cookie.ts";
 import { signAccountToken } from "@/lib/jwt.ts";
 import { successResponse } from "@/utils/response.ts";
+import { toAccountResponse } from "./mappers.ts";
 
 // Compared against when the email is unknown so response time doesn't reveal which emails exist.
 const DUMMY_HASH = bcrypt.hashSync("flagkit-dummy-password", 10);
@@ -21,10 +23,10 @@ export const loginRoute: FastifyPluginAsyncZod = async (app) => {
     {
       schema: {
         tags: ["accounts"],
-        summary: "Log in and receive a JWT (valid for 7 days)",
+        summary: "Log in and receive a session cookie (valid for 7 days)",
         body: CredentialsBody,
         response: {
-          [HttpStatus.OK]: apiSuccessSchema(AuthResponse),
+          [HttpStatus.OK]: apiSuccessSchema(AccountResponse),
           [HttpStatus.UNAUTHORIZED]: ApiErrorResponse,
           [HttpStatus.UNPROCESSABLE_ENTITY]: ApiErrorResponse,
         },
@@ -42,7 +44,11 @@ export const loginRoute: FastifyPluginAsyncZod = async (app) => {
 
       const token = await signAccountToken(account.id);
 
-      return reply.code(HttpStatus.OK).send(successResponse("Logged in!", { email, token }));
+      setAuthCookie(reply, token);
+
+      return reply
+        .code(HttpStatus.OK)
+        .send(successResponse("Logged in!", toAccountResponse(account)));
     },
   );
 };

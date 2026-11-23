@@ -3,6 +3,8 @@ import scalar from "@scalar/fastify-api-reference";
 import type { FastifyInstance } from "fastify";
 import { jsonSchemaTransform } from "fastify-type-provider-zod";
 
+import { AUTH_COOKIE_NAME } from "@/lib/auth-cookie.ts";
+
 /**
  * @fastify/swagger generates the OpenAPI spec from the route schemas,
  * Scalar renders it at /docs. Register before the routes.
@@ -17,7 +19,7 @@ export function registerApiDocs(app: FastifyInstance) {
       },
       components: {
         securitySchemes: {
-          bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+          cookieAuth: { type: "apiKey", in: "cookie", name: AUTH_COOKIE_NAME },
           apiKeyAuth: { type: "apiKey", in: "header", name: "x-api-key" },
         },
       },

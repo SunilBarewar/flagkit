@@ -2,7 +2,7 @@ import { HttpStatus } from "@flagkit/shared";
 import { ApiErrorResponse } from "@flagkit/shared/schemas";
 
 /** Shown as a lock icon / "Authorize" box in the OpenAPI docs. */
-export const security = [{ bearerAuth: [] }];
+export const security = [{ cookieAuth: [] }];
 
 /** Same, for SDK routes that authenticate with a project API key. */
 export const apiKeySecurity = [{ apiKeyAuth: [] }];

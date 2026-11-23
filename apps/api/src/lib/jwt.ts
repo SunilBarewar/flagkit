@@ -4,14 +4,15 @@ import { Config } from "@/env.ts";
 
 const secret = new TextEncoder().encode(Config.JWT_SECRET);
 
-export const TOKEN_TTL = "7d";
+/** Session length. The auth cookie uses the same value as its max-age. */
+export const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export async function signAccountToken(accountId: string): Promise<string> {
   return new SignJWT({})
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(accountId)
     .setIssuedAt()
-    .setExpirationTime(TOKEN_TTL)
+    .setExpirationTime(`${TOKEN_TTL_SECONDS}s`)
     .sign(secret);
 }
 
