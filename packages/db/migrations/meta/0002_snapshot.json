@@ -48,9 +48,7 @@
         "accounts_email_unique": {
           "name": "accounts_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -128,12 +126,8 @@
           "name": "projects_account_id_accounts_id_fk",
           "tableFrom": "projects",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -143,9 +137,7 @@
         "projects_api_key_id_unique": {
           "name": "projects_api_key_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "api_key_id"
-          ]
+          "columns": ["api_key_id"]
         }
       },
       "policies": {},
