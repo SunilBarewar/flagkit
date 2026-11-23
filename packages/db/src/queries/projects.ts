@@ -1,4 +1,4 @@
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 
 import { db } from "../instance.ts";
 import { projects, type NewProject, type Project } from "../schema/index.ts";
@@ -13,6 +13,19 @@ export type InsertProjectInput = Pick<NewProject, "accountId" | "name" | "apiKey
 export async function insertProject(input: InsertProjectInput): Promise<Project> {
   const [project] = await db.insert(projects).values(input).returning();
   return project!;
+}
+
+/** Scoped to the owner, so another account's project id is never found. */
+export async function findProjectByIdAndAccountId(
+  id: string,
+  accountId: string,
+): Promise<Project | undefined> {
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.id, id), eq(projects.accountId, accountId)))
+    .limit(1);
+  return project;
 }
 
 /** Look a project up by the public part of its API key. */
