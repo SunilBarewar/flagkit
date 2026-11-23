@@ -2,14 +2,16 @@ import { updateAccount } from "@flagkit/db";
 import { ErrorCode, HttpStatus, NotFoundError } from "@flagkit/shared";
 import {
   AccountResponse,
-  ErrorResponse,
+  ApiErrorResponse,
   IdParams,
   UpdateAccountBody,
+  apiSuccessSchema,
 } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { protectedErrorResponses, security } from "@/common/responses.ts";
 import { hashPassword } from "@/lib/password.ts";
+import { successResponse } from "@/utils/response.ts";
 import { toAccountResponse } from "./mappers.ts";
 
 export const updateAccountRoute: FastifyPluginAsyncZod = async (app) => {
@@ -23,9 +25,9 @@ export const updateAccountRoute: FastifyPluginAsyncZod = async (app) => {
         params: IdParams,
         body: UpdateAccountBody,
         response: {
-          [HttpStatus.OK]: AccountResponse,
-          [HttpStatus.CONFLICT]: ErrorResponse,
-          [HttpStatus.UNPROCESSABLE_ENTITY]: ErrorResponse,
+          [HttpStatus.OK]: apiSuccessSchema(AccountResponse),
+          [HttpStatus.CONFLICT]: ApiErrorResponse,
+          [HttpStatus.UNPROCESSABLE_ENTITY]: ApiErrorResponse,
           ...protectedErrorResponses,
         },
       },
@@ -43,7 +45,7 @@ export const updateAccountRoute: FastifyPluginAsyncZod = async (app) => {
         throw new NotFoundError("Account not found", { code: ErrorCode.NOT_FOUND });
       }
 
-      return toAccountResponse(account);
+      return successResponse("Account updated", toAccountResponse(account));
     },
   );
 };

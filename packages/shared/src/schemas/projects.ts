@@ -17,7 +17,6 @@ export type ProjectResponse = z.infer<typeof ProjectResponse>;
 
 /** The only response that ever carries the plaintext API key. */
 export const CreateProjectResponse = z.object({
-  message: z.string(),
   project: ProjectResponse,
   apiKey: z.string(),
 });

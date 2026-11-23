@@ -7,9 +7,8 @@ export const CredentialsBody = z.object({
 });
 export type CredentialsBody = z.infer<typeof CredentialsBody>;
 
-/** Response for both creating an account and logging in. */
+/** Data returned when creating an account or logging in. */
 export const AuthResponse = z.object({
-  message: z.string(),
   email: z.email(),
   token: z.string(),
 });

@@ -1,10 +1,16 @@
 import { findAccountByEmail, insertAccount } from "@flagkit/db";
 import { ConflictError, ErrorCode, HttpStatus } from "@flagkit/shared";
-import { AuthResponse, CredentialsBody, ErrorResponse } from "@flagkit/shared/schemas";
+import {
+  ApiErrorResponse,
+  AuthResponse,
+  CredentialsBody,
+  apiSuccessSchema,
+} from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { signAccountToken } from "@/lib/jwt.ts";
 import { hashPassword } from "@/lib/password.ts";
+import { successResponse } from "@/utils/response.ts";
 
 export const createAccountRoute: FastifyPluginAsyncZod = async (app) => {
   app.post(
@@ -15,9 +21,9 @@ export const createAccountRoute: FastifyPluginAsyncZod = async (app) => {
         summary: "Create an account",
         body: CredentialsBody,
         response: {
-          [HttpStatus.OK]: AuthResponse,
-          [HttpStatus.CONFLICT]: ErrorResponse,
-          [HttpStatus.UNPROCESSABLE_ENTITY]: ErrorResponse,
+          [HttpStatus.OK]: apiSuccessSchema(AuthResponse),
+          [HttpStatus.CONFLICT]: ApiErrorResponse,
+          [HttpStatus.UNPROCESSABLE_ENTITY]: ApiErrorResponse,
         },
       },
     },
@@ -35,7 +41,7 @@ export const createAccountRoute: FastifyPluginAsyncZod = async (app) => {
       const account = await insertAccount({ email, password: hashedPassword });
       const token = await signAccountToken(account.id);
 
-      return reply.code(HttpStatus.OK).send({ message: "Account created!", email, token });
+      return reply.code(HttpStatus.OK).send(successResponse("Account created!", { email, token }));
     },
   );
 };

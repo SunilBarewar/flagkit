@@ -1,10 +1,16 @@
 import { insertProject } from "@flagkit/db";
 import { HttpStatus } from "@flagkit/shared";
-import { CreateProjectBody, CreateProjectResponse, ErrorResponse } from "@flagkit/shared/schemas";
+import {
+  ApiErrorResponse,
+  CreateProjectBody,
+  CreateProjectResponse,
+  apiSuccessSchema,
+} from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { security } from "@/common/responses.ts";
 import { generateApiKey } from "@/lib/api-key.ts";
+import { successResponse } from "@/utils/response.ts";
 import { toProjectResponse } from "./mappers.ts";
 
 export const createProjectRoute: FastifyPluginAsyncZod = async (app) => {
@@ -18,9 +24,9 @@ export const createProjectRoute: FastifyPluginAsyncZod = async (app) => {
         security,
         body: CreateProjectBody,
         response: {
-          [HttpStatus.CREATED]: CreateProjectResponse,
-          [HttpStatus.UNAUTHORIZED]: ErrorResponse,
-          [HttpStatus.UNPROCESSABLE_ENTITY]: ErrorResponse,
+          [HttpStatus.CREATED]: apiSuccessSchema(CreateProjectResponse),
+          [HttpStatus.UNAUTHORIZED]: ApiErrorResponse,
+          [HttpStatus.UNPROCESSABLE_ENTITY]: ApiErrorResponse,
         },
       },
     },
@@ -34,11 +40,12 @@ export const createProjectRoute: FastifyPluginAsyncZod = async (app) => {
         apiKeyHash,
       });
 
-      return reply.code(HttpStatus.CREATED).send({
-        message: "Store this key now, it won't be shown again",
-        project: toProjectResponse(project),
-        apiKey,
-      });
+      return reply.code(HttpStatus.CREATED).send(
+        successResponse("Project created. Store the API key now, it won't be shown again", {
+          project: toProjectResponse(project),
+          apiKey,
+        }),
+      );
     },
   );
 };

@@ -1,9 +1,11 @@
 import { deleteAccount } from "@flagkit/db";
 import { ErrorCode, HttpStatus, NotFoundError } from "@flagkit/shared";
-import { IdParams, MessageResponse } from "@flagkit/shared/schemas";
+import { IdParams, apiSuccessSchema } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import { z } from "zod";
 
 import { protectedErrorResponses, security } from "@/common/responses.ts";
+import { successResponse } from "@/utils/response.ts";
 
 export const deleteAccountRoute: FastifyPluginAsyncZod = async (app) => {
   app.delete(
@@ -14,7 +16,7 @@ export const deleteAccountRoute: FastifyPluginAsyncZod = async (app) => {
         summary: "Delete an account",
         security,
         params: IdParams,
-        response: { [HttpStatus.OK]: MessageResponse, ...protectedErrorResponses },
+        response: { [HttpStatus.OK]: apiSuccessSchema(z.null()), ...protectedErrorResponses },
       },
     },
     async (request) => {
@@ -24,7 +26,7 @@ export const deleteAccountRoute: FastifyPluginAsyncZod = async (app) => {
         throw new NotFoundError("Account not found", { code: ErrorCode.NOT_FOUND });
       }
 
-      return { message: "Account deleted" };
+      return successResponse("Account deleted", null);
     },
   );
 };

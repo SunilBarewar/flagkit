@@ -1,7 +1,7 @@
 import { countProjectsByAccountId, listProjectsByAccountId } from "@flagkit/db";
 import { HttpStatus } from "@flagkit/shared";
 import {
-  ErrorResponse,
+  ApiErrorResponse,
   PaginationQuery,
   ProjectResponse,
   apiPaginatedSchema,
@@ -23,7 +23,7 @@ export const listProjectsRoute: FastifyPluginAsyncZod = async (app) => {
         querystring: PaginationQuery,
         response: {
           [HttpStatus.OK]: apiPaginatedSchema(ProjectResponse),
-          [HttpStatus.UNAUTHORIZED]: ErrorResponse,
+          [HttpStatus.UNAUTHORIZED]: ApiErrorResponse,
         },
       },
     },

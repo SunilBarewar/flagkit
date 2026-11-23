@@ -10,6 +10,8 @@ import {
 import type { FastifyError, FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 
+import { errorResponse } from "@/utils/response.ts";
+
 const PG_UNIQUE_VIOLATION = "23505";
 const PG_FOREIGN_KEY_VIOLATION = "23503";
 
@@ -64,44 +66,39 @@ export function registerErrorHandler(app: FastifyInstance) {
 
     // Fastify's own JSON-schema validation (request body/params/querystring).
     if (err.validation) {
-      return reply.code(HttpStatus.BAD_REQUEST).send({
-        error: "BadRequestError",
-        code: ErrorCode.BAD_REQUEST,
-        message: err.message,
-        details: err.validation,
-      });
+      return reply
+        .code(HttpStatus.BAD_REQUEST)
+        .send(errorResponse(err.message, { code: ErrorCode.BAD_REQUEST, details: err.validation }));
     }
 
     const appError = toAppError(err);
     if (appError) {
       if (appError.statusCode >= HttpStatus.INTERNAL_SERVER_ERROR)
         request.log.error({ err }, "request failed");
-      return reply.code(appError.statusCode).send(appError.toJSON());
+      return reply
+        .code(appError.statusCode)
+        .send(errorResponse(appError.message, { code: appError.code, details: appError.details }));
     }
 
     // Other Fastify errors with a 4xx status (bad JSON, 404 payload too large, ...).
     if (err.statusCode && err.statusCode < HttpStatus.INTERNAL_SERVER_ERROR) {
-      return reply.code(err.statusCode).send({
-        error: err.name,
-        code: err.code,
-        message: err.message,
-      });
+      return reply
+        .code(err.statusCode)
+        .send(errorResponse(err.message, { code: err.code || ErrorCode.BAD_REQUEST }));
     }
 
     // Unknown: log everything, leak nothing.
     request.log.error({ err }, "unhandled error");
-    return reply.code(HttpStatus.INTERNAL_SERVER_ERROR).send({
-      error: "InternalError",
-      code: ErrorCode.INTERNAL_ERROR,
-      message: "Internal server error",
-    });
+    return reply
+      .code(HttpStatus.INTERNAL_SERVER_ERROR)
+      .send(errorResponse("Internal server error", { code: ErrorCode.INTERNAL_ERROR }));
   });
 
   app.setNotFoundHandler((request, reply) =>
-    reply.code(HttpStatus.NOT_FOUND).send({
-      error: "NotFoundError",
-      code: ErrorCode.NOT_FOUND,
-      message: `Route ${request.method} ${request.url} not found`,
-    }),
+    reply.code(HttpStatus.NOT_FOUND).send(
+      errorResponse(`Route ${request.method} ${request.url} not found`, {
+        code: ErrorCode.NOT_FOUND,
+      }),
+    ),
   );
 }
