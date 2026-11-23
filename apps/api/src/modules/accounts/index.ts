@@ -3,7 +3,6 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { createAccountRoute } from "./create-account.ts";
 import { deleteAccountRoute } from "./delete-account.ts";
-import { generateAccountApiKeyRoute } from "./generate-api-key.ts";
 import { getAccountRoute } from "./get-account.ts";
 import { loginRoute } from "./login.ts";
 import { updateAccountRoute } from "./update-account.ts";
@@ -32,5 +31,4 @@ export const accountProtectedRoutes: FastifyPluginAsyncZod = async (app) => {
   app.register(getAccountRoute);
   app.register(updateAccountRoute);
   app.register(deleteAccountRoute);
-  app.register(generateAccountApiKeyRoute);
 };

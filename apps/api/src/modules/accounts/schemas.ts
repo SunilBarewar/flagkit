@@ -16,11 +16,10 @@ export const AuthResponse = z.object({
 
 export const IdParams = z.object({ id: z.uuid() });
 
-/** Never includes the password hash or API key hash. */
+/** Never includes the password hash. */
 export const AccountResponse = z.object({
   id: z.uuid(),
   email: z.email(),
-  hasApiKey: z.boolean(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -29,7 +28,6 @@ export function toAccountResponse(account: Account): z.infer<typeof AccountRespo
   return {
     id: account.id,
     email: account.email,
-    hasApiKey: account.apiKeyHash !== null,
     createdAt: account.createdAt.toISOString(),
     updatedAt: account.updatedAt.toISOString(),
   };
@@ -43,8 +41,3 @@ export const UpdateAccountBody = z
   .refine((body) => body.email !== undefined || body.password !== undefined, {
     message: "Provide at least one of: email, password",
   });
-
-export const ApiKeyResponse = z.object({
-  message: z.string(),
-  apiKey: z.string(),
-});
