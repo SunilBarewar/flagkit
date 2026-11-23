@@ -1,0 +1,36 @@
+{
+  "name": "flagkit",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev:api": "pnpm --filter @flagkit/api dev",
+    "db:generate": "pnpm --filter @flagkit/db db:generate",
+    "db:migrate": "pnpm --filter @flagkit/db db:migrate",
+    "lint": "oxlint",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "prepare": "simple-git-hooks"
+  },
+  "devDependencies": {
+    "lint-staged": "^17.6.1",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
+    "simple-git-hooks": "^2.14.0",
+    "tsx": "^4.23.15"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,mts,js,mjs,json,jsonc,md}": "oxfmt --no-error-on-unmatched-pattern"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@11.18.0"
+}
