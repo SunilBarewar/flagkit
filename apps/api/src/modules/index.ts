@@ -1,6 +1,7 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { accountProtectedRoutes, accountPublicRoutes } from "./accounts/index.ts";
+import { flagProtectedRoutes } from "./flags/index.ts";
 import { healthRoutes } from "./health/index.ts";
 import { projectProtectedRoutes } from "./projects/index.ts";
 
@@ -16,5 +17,6 @@ export const registerRoutes: FastifyPluginAsyncZod = async (app) => {
 
     protectedApp.register(accountProtectedRoutes, { prefix: "/accounts" });
     protectedApp.register(projectProtectedRoutes, { prefix: "/projects" });
+    protectedApp.register(flagProtectedRoutes, { prefix: "/projects/:projectId/flags" });
   });
 };

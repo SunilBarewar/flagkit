@@ -26,6 +26,8 @@ export function registerApiDocs(app: FastifyInstance) {
       tags: [
         { name: "health", description: "Liveness and readiness checks" },
         { name: "accounts", description: "Account management" },
+        { name: "projects", description: "Projects" },
+        { name: "flags", description: "Feature flags" },
       ],
     },
     transform: jsonSchemaTransform,
