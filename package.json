@@ -7,6 +7,7 @@
     "dev:api": "pnpm --filter @flagkit/api dev",
     "db:generate": "pnpm --filter @flagkit/db db:generate",
     "db:migrate": "pnpm --filter @flagkit/db db:migrate",
+    "db:studio": "pnpm --filter @flagkit/db db:studio",
     "lint": "oxlint",
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck",
