@@ -1,5 +1,8 @@
 import { FlaskConical, Plus, Sparkles, ToggleRight, Users } from "lucide-react";
-import { AppHeader } from "@/components/layout/app-header";
+import { ArrowLeft } from "lucide-react";
+import { Link } from "react-router";
+import { Button } from "@/components/ui/button";
+import { paths } from "@/routes/paths";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const templates = [
@@ -33,8 +36,13 @@ const templates = [
 export function CreateFlagPage() {
   return (
     <>
-      <AppHeader />
-      <main className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-16">
+      <main className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-10">
+        <Button asChild variant="outline" className="self-start">
+          <Link to={paths.dashboard}>
+            <ArrowLeft /> Back to feature flags
+          </Link>
+        </Button>
+
         <header className="flex flex-col items-center gap-2 text-center">
           <h1 className="text-4xl font-semibold tracking-tight">Create a feature flag</h1>
           <p className="text-muted-foreground">Choose a template or start from scratch</p>
