@@ -15,8 +15,8 @@ export function useToggleFlag(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ flagId, isActive }: { flagId: string; isActive: boolean }) =>
-      apiClient.flags.update(projectId, flagId, { isActive }),
+    mutationFn: ({ flagId, enabled }: { flagId: string; enabled: boolean }) =>
+      apiClient.flags.update(projectId, flagId, { enabled }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: flagsKey(projectId) }),
   });
 }

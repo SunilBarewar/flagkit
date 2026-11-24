@@ -55,7 +55,7 @@ export function CreateFlagForm() {
   const { project } = useCurrentProject();
   const navigate = useNavigate();
   const create = useCreateFlag(project.id);
-  const [isActive, setIsActive] = useState(true);
+  const [enabled, setEnabled] = useState(true);
   const [rollout, setRollout] = useState(100);
 
   const {
@@ -74,8 +74,7 @@ export function CreateFlagForm() {
         key: values.key,
         description: values.description || undefined,
         type: "boolean",
-        isActive,
-        defaultValue: false,
+        enabled,
         rolloutPercentage: rollout,
       },
       {
@@ -171,13 +170,13 @@ export function CreateFlagForm() {
             </div>
 
             <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-              <Label htmlFor="isActive" className="text-sm">
+              <Label htmlFor="enabled" className="text-sm">
                 Enabled
                 <Info className="size-4 text-muted-foreground">
                   <title>Turn the flag on for the users it's rolled out to</title>
                 </Info>
               </Label>
-              <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
+              <Switch id="enabled" checked={enabled} onCheckedChange={setEnabled} />
             </div>
           </div>
         </Card>
@@ -216,7 +215,7 @@ export function CreateFlagForm() {
               </div>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              {isActive
+              {enabled
                 ? `Rolled out to ${rollout}% of users.`
                 : "The flag is disabled, so no one gets it until you enable it."}
             </p>

@@ -4,7 +4,7 @@ import { Switch } from "@/components/ui/switch";
 
 interface FlagRowProps {
   flag: FlagResponse;
-  onToggle: (isActive: boolean) => void;
+  onToggle: (enabled: boolean) => void;
   disabled?: boolean;
 }
 
@@ -34,10 +34,10 @@ export function FlagRow({ flag, onToggle, disabled }: FlagRowProps) {
       </div>
 
       <Switch
-        checked={flag.isActive}
+        checked={flag.enabled}
         onCheckedChange={onToggle}
         disabled={disabled}
-        aria-label={`${flag.isActive ? "Disable" : "Enable"} ${flag.key}`}
+        aria-label={`${flag.enabled ? "Disable" : "Enable"} ${flag.key}`}
       />
     </li>
   );

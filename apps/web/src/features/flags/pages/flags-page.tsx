@@ -52,7 +52,7 @@ export function FlagsPage() {
                 key={flag.id}
                 flag={flag}
                 disabled={toggle.isPending && toggle.variables.flagId === flag.id}
-                onToggle={(isActive) => toggle.mutate({ flagId: flag.id, isActive })}
+                onToggle={(enabled) => toggle.mutate({ flagId: flag.id, enabled })}
               />
             ))}
           </ul>
