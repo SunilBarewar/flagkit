@@ -81,3 +81,16 @@ export async function deleteFeatureFlag(projectId: string, flagId: string): Prom
     .returning({ id: featureFlags.id });
   return deleted.length > 0;
 }
+
+/** Lookup by the key the SDK passes, scoped to the project. */
+export async function findFeatureFlagByKey(
+  projectId: string,
+  key: string,
+): Promise<FeatureFlag | undefined> {
+  const [flag] = await db
+    .select()
+    .from(featureFlags)
+    .where(and(eq(featureFlags.projectId, projectId), eq(featureFlags.key, key)))
+    .limit(1);
+  return flag;
+}
