@@ -96,8 +96,9 @@ of variants.
 
 The default treatment is used when no targeting rule matches.
 
-- For a Boolean flag, it is controlled by `default_value` and
-  `rollout_percentage` on `feature_flags`.
+- For a Boolean flag, it is controlled by `rollout_percentage` on
+  `feature_flags`: that share of the users who reach the default
+  treatment get `true`, and the rest get `false`.
 - For a multivariate flag, it is controlled by the
   `default_weight` of each row in `flag_variants`.
 
@@ -206,18 +207,17 @@ The service needs a persistent definition of every flag. It must know:
 
 ### Suggested columns
 
-| Column               | Type      | Purpose                                |
-| -------------------- | --------- | -------------------------------------- |
-| `id`                 | UUID      | Primary key                            |
-| `project_id`         | UUID      | References `projects.id`               |
-| `key`                | VARCHAR   | Identifier used by the SDK             |
-| `description`        | TEXT      | Optional explanation                   |
-| `type`               | ENUM      | `boolean` or `multivariate`            |
-| `is_active`          | BOOLEAN   | Global kill switch: is the flag live?  |
-| `default_value`      | BOOLEAN   | Boolean served when no rule matches    |
-| `rollout_percentage` | INTEGER   | Share of those users who get the value |
-| `created_at`         | TIMESTAMP | Creation time                          |
-| `updated_at`         | TIMESTAMP | Last update time                       |
+| Column               | Type      | Purpose                             |
+| -------------------- | --------- | ----------------------------------- |
+| `id`                 | UUID      | Primary key                         |
+| `project_id`         | UUID      | References `projects.id`            |
+| `key`                | VARCHAR   | Identifier used by the SDK          |
+| `description`        | TEXT      | Optional explanation                |
+| `type`               | ENUM      | `boolean` or `multivariate`         |
+| `enabled`            | BOOLEAN   | Global kill switch: is the flag on? |
+| `rollout_percentage` | INTEGER   | Share of users who get `true`       |
+| `created_at`         | TIMESTAMP | Creation time                       |
+| `updated_at`         | TIMESTAMP | Last update time                    |
 
 Example Boolean flag:
 
@@ -227,17 +227,16 @@ Example Boolean flag:
   "key": "new_checkout",
   "description": "Redesigned checkout flow",
   "type": "boolean",
-  "is_active": true,
-  "default_value": false,
-  "rollout_percentage": 0
+  "enabled": true,
+  "rollout_percentage": 100
 }
 ```
 
 ### What do the configuration fields mean?
 
-**`is_active` --- global kill switch**
+**`enabled` --- global kill switch**
 
-This is the top-level switch for the flag: is it live?
+This is the top-level switch for the flag: is it on?
 
 - `true`: the flag is evaluated normally.
 - `false`: immediately return the disabled result, regardless of rules
@@ -246,35 +245,39 @@ This is the top-level switch for the flag: is it live?
 This is useful when a feature causes problems and needs to be switched
 off quickly.
 
-Note that an active flag does not necessarily return `true`. It only
-means the flag is allowed to decide. For example, an active flag whose
-`default_value` is `false` still returns `false` to users who match no
-rule.
+Note that an enabled flag does not necessarily return `true` for every
+user. It only means the flag is allowed to decide. The rollout
+percentage then decides who gets `true`.
 
-**`default_value` --- default Boolean value**
+**`rollout_percentage` --- share of users who get `true`**
 
-This is the Boolean result for users who do not match any targeting
-rule, before applying the default rollout.
-
-For example, if it is `false`, unmatched users receive `false`.
-
-**`rollout_percentage` --- default Boolean rollout**
-
-This controls the percentage of users who receive the default value.
+This is the percentage of users who receive `true` when the flag is
+enabled and no targeting rule decides for them. With no targeting rules,
+that is every user.
 
 For example:
 
 ```text
-is_active = true
-default_value = true
+enabled = true
 rollout_percentage = 20
 ```
 
-The system enables the feature for 20% of users who reach the default
-treatment.
+The system enables the feature for 20% of users. The same user always
+lands in the same bucket (a stable hash of the user ID and the flag
+key), so raising the percentage only adds users.
 
-If `default_value` is false, the default Boolean result is false; a
-positive rollout percentage should not turn it on.
+Common settings:
+
+- `100`: on for everyone. This is a plain Boolean flag.
+- `1`--`99`: a gradual rollout.
+- `0`: on for nobody by default. Use this with targeting rules, so only
+  the users a rule matches get the feature.
+
+There is deliberately no separate "default value" column. A Boolean flag
+only ever serves `true` or `false`: the flag is off (`false`) when it is
+disabled, and on (`true`) for the users the rollout and rules select.
+"Enabled for everyone except one country" is a rollout of `100` plus a
+rule for that country that serves `false`.
 
 ### Relationship with other tables
 
@@ -302,7 +305,7 @@ The flag key only needs to be unique within its project.
 1.  When creating a flag, insert its definition and default
     configuration.
 2.  When evaluating a flag, find it by project and flag key.
-3.  Check `is_active` before evaluating rules.
+3.  Check `enabled` before evaluating rules.
 4.  If no rule matches, use the default Boolean settings or default
     variant allocation, depending on the flag type.
 
@@ -1004,7 +1007,7 @@ If the flag does not exist, return the agreed fallback result.
 
 ### Step 2: Check the global kill switch
 
-If `feature_flags.is_active` is false, return disabled immediately.
+If `feature_flags.enabled` is false, return disabled immediately.
 
 This takes precedence over all targeting rules and allocations.
 
@@ -1026,8 +1029,8 @@ For a Boolean flag:
 
 - If a rule matches, use `serve_enabled` and that rule's
   `rollout_percentage`.
-- If no rule matches, use `default_value` and the flag's
-  `rollout_percentage`.
+- If no rule matches, use the flag's `rollout_percentage`: that share
+  of users gets `true`, the rest get `false`.
 
 For a multivariate flag:
 
