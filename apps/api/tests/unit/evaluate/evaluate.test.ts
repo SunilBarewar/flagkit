@@ -3,22 +3,19 @@ import { describe, expect, it } from "vitest";
 import { evaluateFlag } from "@/modules/evaluate/evaluate.ts";
 
 describe("evaluateFlag", () => {
-  it("is off when the flag is inactive, even if its default is true", () => {
-    expect(evaluateFlag({ key: "checkout", isActive: false, defaultValue: true })).toEqual({
+  it("is off when the flag is disabled", () => {
+    expect(evaluateFlag({ key: "checkout", enabled: false })).toEqual({
       key: "checkout",
       value: false,
       reason: "DISABLED",
     });
   });
 
-  it("serves the default value when active", () => {
-    expect(evaluateFlag({ key: "checkout", isActive: true, defaultValue: true })).toEqual({
+  it("is on when the flag is enabled", () => {
+    expect(evaluateFlag({ key: "checkout", enabled: true })).toEqual({
       key: "checkout",
       value: true,
-      reason: "DEFAULT",
+      reason: "ENABLED",
     });
-    expect(evaluateFlag({ key: "checkout", isActive: true, defaultValue: false }).value).toBe(
-      false,
-    );
   });
 });

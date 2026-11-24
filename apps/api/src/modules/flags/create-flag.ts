@@ -20,7 +20,8 @@ export const createFlagRoute: FastifyPluginAsyncZod = async (app) => {
       schema: {
         tags: ["flags"],
         summary: "Create a feature flag",
-        description: "New flags start inactive. The key must be unique within the project.",
+        description:
+          "New flags start disabled unless you enable them. The key must be unique within the project.",
         security,
         params: ProjectIdParams,
         body: CreateFlagBody,
