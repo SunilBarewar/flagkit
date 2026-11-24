@@ -1,8 +1,11 @@
-import { Search, Settings, Sparkles } from "lucide-react";
+import { LogOut, Search, Settings, Sparkles } from "lucide-react";
 import { ProjectPicker } from "@/components/layout/project-picker";
 import { Button } from "@/components/ui/button";
+import { useLogout } from "@/features/auth/hooks";
 
 export function AppHeader() {
+  const logout = useLogout();
+
   return (
     <header className="sticky top-0 z-40 grid h-14 grid-cols-[1fr_minmax(0,32rem)_1fr] items-center gap-4 border-b bg-sidebar px-4">
       <div className="flex items-center gap-2">
@@ -24,6 +27,9 @@ export function AppHeader() {
         </Button>
         <Button variant="ghost" size="icon" aria-label="Assistant">
           <Sparkles />
+        </Button>
+        <Button variant="ghost" size="icon" aria-label="Log out" onClick={() => logout.mutate()}>
+          <LogOut />
         </Button>
       </div>
     </header>
