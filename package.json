@@ -17,11 +17,13 @@
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^5.1.1",
     "lint-staged": "^17.6.1",
     "oxfmt": "^0.79.0",
     "oxlint": "^1.94.0",
     "simple-git-hooks": "^2.14.0",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "vitest": "^5.1.1"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
