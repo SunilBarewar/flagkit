@@ -1,12 +1,9 @@
 import { Check, ChevronsUpDown, Plus, Search, Settings } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useCurrentProject } from "@/features/projects/project-context";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-
-type Project = { id: string; name: string };
-
-const projects: Project[] = [{ id: "default", name: "Default project" }];
 
 function ProjectAvatar({ name }: { name: string }) {
   return (
@@ -19,9 +16,8 @@ function ProjectAvatar({ name }: { name: string }) {
 export function ProjectPicker() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState(projects[0].id);
-
-  const selected = projects.find((p) => p.id === selectedId) ?? projects[0];
+  const { project: selected, projects, select } = useCurrentProject();
+  const selectedId = selected.id;
   const filtered = projects.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
@@ -64,7 +60,7 @@ export function ProjectPicker() {
               key={project.id}
               type="button"
               onClick={() => {
-                setSelectedId(project.id);
+                select(project.id);
                 setOpen(false);
               }}
               className={cn(
