@@ -1,0 +1,1 @@
+ALTER TABLE "feature_flags" RENAME COLUMN "is_active" TO "enabled";

@@ -5,7 +5,7 @@ import { featureFlags, type FeatureFlag, type NewFeatureFlag } from "../schema/i
 
 export type InsertFeatureFlagInput = Pick<
   NewFeatureFlag,
-  "projectId" | "key" | "description" | "type" | "isActive" | "defaultValue" | "rolloutPercentage"
+  "projectId" | "key" | "description" | "type" | "enabled" | "rolloutPercentage"
 >;
 
 /**
@@ -56,7 +56,7 @@ export async function findFeatureFlag(
 
 /** The key and type are fixed once a flag exists: the SDK depends on both. */
 export type UpdateFeatureFlagInput = Partial<
-  Pick<NewFeatureFlag, "description" | "isActive" | "defaultValue" | "rolloutPercentage">
+  Pick<NewFeatureFlag, "description" | "enabled" | "rolloutPercentage">
 >;
 
 /** Returns the updated row, or undefined if the project has no such flag. */

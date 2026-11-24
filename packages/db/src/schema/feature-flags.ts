@@ -17,11 +17,12 @@ export const featureFlags = pgTable(
     description: text("description"),
     type: flagTypeEnum("type").notNull(),
     /** Global kill switch: when false the flag is off for everyone, whatever else is set. */
-    isActive: boolean("is_active").notNull().default(false),
-    /** Boolean value served to users who match no targeting rule. */
-    defaultValue: boolean("default_value").notNull().default(false),
-    /** Percentage (0-100) of those users who receive `defaultValue`. */
-    rolloutPercentage: integer("rollout_percentage").notNull().default(0),
+    enabled: boolean("enabled").notNull().default(false),
+    /**
+     * Percentage (0-100) of users who get `true` when the flag is enabled and no targeting rule
+     * decides for them. With no rules at all, that is every user: 100 means everyone.
+     */
+    rolloutPercentage: integer("rollout_percentage").notNull().default(100),
     ...timestamps,
   },
   (table) => [
