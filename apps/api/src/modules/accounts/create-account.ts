@@ -1,5 +1,5 @@
-import { findAccountByEmail, insertAccount } from "@flagkit/db";
-import { ConflictError, ErrorCode, HttpStatus } from "@flagkit/shared";
+import { findAccountByEmail, insertAccount, insertProject } from "@flagkit/db";
+import { ConflictError, DEFAULT_PROJECT_NAME, ErrorCode, HttpStatus } from "@flagkit/shared";
 import {
   AccountResponse,
   ApiErrorResponse,
@@ -9,6 +9,7 @@ import {
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { setAuthCookie } from "@/lib/auth-cookie.ts";
+import { generateApiKey } from "@/lib/api-key.ts";
 import { signAccountToken } from "@/lib/jwt.ts";
 import { hashPassword } from "@/lib/password.ts";
 import { successResponse } from "@/utils/response.ts";
@@ -41,6 +42,17 @@ export const createAccountRoute: FastifyPluginAsyncZod = async (app) => {
       const hashedPassword = await hashPassword(password);
 
       const account = await insertAccount({ email, password: hashedPassword });
+
+      // So the dashboard always has a project to select. Its API key isn't shown: the plaintext
+      // is only ever returned when a project is created through the projects route.
+      const { apiKeyId, apiKeyHash } = generateApiKey();
+      await insertProject({
+        accountId: account.id,
+        name: DEFAULT_PROJECT_NAME,
+        apiKeyId,
+        apiKeyHash,
+      });
+
       const token = await signAccountToken(account.id);
 
       setAuthCookie(reply, token);
