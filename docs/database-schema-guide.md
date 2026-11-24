@@ -19,8 +19,10 @@ The goal is to make the data model understandable before implementation.
 The V1 design deliberately keeps the system small:
 
 - A project contains feature flags.
-- There is no separate `flag_configs` table. A flag has one
-  configuration, stored directly on `feature_flags`.
+- There is no separate `flag_configs` or default-allocation table. A flag has one
+  configuration, stored directly on `feature_flags`. The default
+  variant distribution of a multivariate flag is stored on the variants
+  themselves, as `flag_variants.default_weight`.
 - The system supports Boolean and multivariate flags.
 - Targeting rules match user properties supplied by the customer's
   application.
@@ -31,7 +33,7 @@ The V1 design deliberately keeps the system small:
   provide alternative matching paths (effectively OR).
 - The first enabled matching rule, ordered by priority, wins.
 
-The seven tables are:
+The six tables are:
 
 1.  `projects`
 2.  `feature_flags`
@@ -39,7 +41,6 @@ The seven tables are:
 4.  `targeting_rules`
 5.  `rule_conditions`
 6.  `rule_variants`
-7.  `config_variants`
 
 ## 3. First understand the main concepts
 
@@ -97,8 +98,8 @@ The default treatment is used when no targeting rule matches.
 
 - For a Boolean flag, it is controlled by `default_value` and
   `rollout_percentage` on `feature_flags`.
-- For a multivariate flag, it is controlled by the rows in
-  `config_variants`.
+- For a multivariate flag, it is controlled by the
+  `default_weight` of each row in `flag_variants`.
 
 This distinction is important: the default Boolean settings and the
 default multivariate allocation are two different ways of describing the
@@ -280,15 +281,12 @@ positive rollout percentage should not turn it on.
 - Many feature flags belong to one project.
 - One feature flag can have many variants in `flag_variants`.
 - One feature flag can have many targeting rules in `targeting_rules`.
-- One feature flag can have many default variant allocations in
-  `config_variants`.
 
 Relationships:
 
 - `projects.id` → `feature_flags.project_id`
 - `feature_flags.id` → `flag_variants.flag_id`
 - `feature_flags.id` → `targeting_rules.flag_id`
-- `feature_flags.id` → `config_variants.flag_id`
 
 Recommended constraints:
 
@@ -322,8 +320,10 @@ For example, a homepage experiment might have:
 - `blue`
 - `green`
 
-The variants define the possible outcomes. They do not, by themselves,
-define how frequently each outcome is selected.
+The variants define the possible outcomes. Each variant also stores its
+`default_weight`: the share of users who receive it when no targeting
+rule matches. Weights for targeted audiences are stored separately in
+`rule_variants`.
 
 ### Why do we need it?
 
@@ -331,27 +331,48 @@ A multivariate flag must be able to return one of several alternatives
 rather than just `true` or `false`.
 
 Keeping variants in their own table means the same set of variants can
-be referenced by different allocations: the default allocation and the
-allocations attached to targeting rules.
+be referenced by the allocations attached to different targeting rules.
+The default allocation is stored directly on each variant as
+`default_weight`, because it is a single number per variant with no
+other dimension.
 
 ### Suggested columns
 
-| Column       | Type      | Purpose                                 |
-| ------------ | --------- | --------------------------------------- |
-| `id`         | UUID      | Primary key                             |
-| `flag_id`    | UUID      | References `feature_flags.id`           |
-| `key`        | VARCHAR   | Stable variant identifier               |
-| `name`       | VARCHAR   | Human-readable variant name             |
-| `payload`    | JSONB     | Optional data returned with the variant |
-| `created_at` | TIMESTAMP | Creation time                           |
+| Column           | Type      | Purpose                                                  |
+| ---------------- | --------- | -------------------------------------------------------- |
+| `id`             | UUID      | Primary key                                              |
+| `flag_id`        | UUID      | References `feature_flags.id`                            |
+| `key`            | VARCHAR   | Stable variant identifier                                |
+| `name`           | VARCHAR   | Human-readable variant name                              |
+| `payload`        | JSONB     | Optional data returned with the variant                  |
+| `default_weight` | INTEGER   | Weight (0-100) when no targeting rule matches, default 0 |
+| `created_at`     | TIMESTAMP | Creation time                                            |
 
 Example variants:
 
-| key       | name        | payload               |
-| --------- | ----------- | --------------------- |
-| `control` | Control     | `{"theme":"default"}` |
-| `blue`    | Blue Theme  | `{"theme":"blue"}`    |
-| `green`   | Green Theme | `{"theme":"green"}`   |
+| key       | name        | payload               | default_weight |
+| --------- | ----------- | --------------------- | -------------: |
+| `control` | Control     | `{"theme":"default"}` |             50 |
+| `blue`    | Blue Theme  | `{"theme":"blue"}`    |             25 |
+| `green`   | Green Theme | `{"theme":"green"}`   |             25 |
+
+This means users who match no targeting rule receive `control` 50% of
+the time, `blue` 25% and `green` 25%. The default weights of a flag's
+variants must sum to 100.
+
+### What is `default_weight` used for?
+
+It replaces a separate default-allocation table. When no targeting rule
+matches, the engine loads the flag's variants and uses deterministic
+hashing to pick one according to their `default_weight` values.
+
+It is a plain integer column rather than JSON so that the database can
+enforce the 0-100 range, and so that a weight can never point at a
+variant of another flag. `payload` stays reserved for data returned to
+the application, not allocation settings.
+
+If the system later supports per-environment defaults, this column
+would move into a separate allocation table keyed by environment.
 
 ### What is `payload` used for?
 
@@ -375,33 +396,34 @@ The application decides how to use that data.
 
 - One feature flag can have many variants.
 - A variant belongs to exactly one feature flag.
-- A variant can be referenced by multiple `rule_variants` rows and by
-  a `config_variants` row.
+- A variant can be referenced by multiple `rule_variants` rows.
+- A variant carries its own default weight.
 
 Relationships:
 
 - `feature_flags.id` → `flag_variants.flag_id`
 - `flag_variants.id` → `rule_variants.variant_id`
-- `flag_variants.id` → `config_variants.variant_id`
 
 Recommended constraint:
 
 ```sql
 UNIQUE (flag_id, key)
+CHECK (default_weight BETWEEN 0 AND 100)
 ```
 
 ### When is it used?
 
 1.  When a user creates a multivariate flag, they define its variants.
-2.  The variants are then assigned weights in `config_variants` for the
-    default audience.
+2.  Each variant is given a `default_weight`, which defines the
+    distribution for the default audience.
 3.  They can also be assigned different weights in `rule_variants` for
     particular targeting rules.
 4.  During evaluation, the engine selects one variant from the relevant
     weighted allocation and returns its key and payload.
 
-Important: creating a variant does not automatically assign traffic to
-it. The allocation tables do that.
+Important: a new variant starts with `default_weight = 0`, so it
+receives no default traffic until a weight is set. Targeting rules need
+their own `rule_variants` rows.
 
 ---
 
@@ -810,93 +832,7 @@ Bucket 80–99 → green
 
 ---
 
-## 10. Table 7 --- `config_variants`
-
-### What does this table represent?
-
-`config_variants` stores the default variant distribution for a
-multivariate flag.
-
-It is used when no targeting rule matches the user.
-
-### Why do we need it?
-
-A multivariate flag needs a default allocation.
-
-Consider:
-
-```text
-Flag: checkout_experiment
-
-India:
-  control = 50%
-  blue = 50%
-
-Everyone else:
-  control = 100%
-```
-
-The India distribution belongs in `rule_variants`.
-
-The default distribution for everyone else belongs in `config_variants`.
-
-Without this table, the service would not know which variant to return
-when a user does not match any targeting rule.
-
-### Suggested columns
-
-| Column       | Type    | Purpose                       |
-| ------------ | ------- | ----------------------------- |
-| `id`         | UUID    | Primary key                   |
-| `flag_id`    | UUID    | References `feature_flags.id` |
-| `variant_id` | UUID    | References `flag_variants.id` |
-| `weight`     | INTEGER | Default variant weight        |
-
-Example records:
-
-| flag_id         | variant_id        | weight |
-| --------------- | ----------------- | -----: |
-| `checkout_flag` | `control_variant` |    100 |
-
-This means all users who reach the default allocation receive the
-control variant.
-
-Another example:
-
-| flag_id         | variant_id        | weight |
-| --------------- | ----------------- | -----: |
-| `homepage_flag` | `control_variant` |     50 |
-| `homepage_flag` | `blue_variant`    |     25 |
-| `homepage_flag` | `green_variant`   |     25 |
-
-### Relationship with other tables
-
-- One feature flag can have multiple default variant allocations.
-- Each allocation references one variant.
-- The referenced variant must belong to the same feature flag.
-
-Relationships:
-
-- `feature_flags.id` → `config_variants.flag_id`
-- `flag_variants.id` → `config_variants.variant_id`
-
-Recommended constraint:
-
-```sql
-UNIQUE (flag_id, variant_id)
-```
-
-### When is it used?
-
-1.  The evaluation engine checks the flag's targeting rules.
-2.  If no enabled rule matches, it loads the flag's `config_variants`.
-3.  It uses deterministic hashing to select a variant according to the
-    weights.
-4.  It returns that variant.
-
----
-
-## 11. How the seven tables work together
+## 10. How the six tables work together
 
 This section summarizes the table usage in real scenarios.
 
@@ -1015,9 +951,9 @@ Tables involved:
 - `projects`
 - `feature_flags`
 - `flag_variants`
-- `config_variants`
 
-The engine selects a variant using the default distribution.
+The engine selects a variant using the variants' `default_weight`
+values.
 
 ### Use case 6: Multivariate flag with targeting
 
@@ -1046,14 +982,13 @@ Tables involved:
 - `targeting_rules`
 - `rule_conditions`
 - `rule_variants`
-- `config_variants`
 
 The engine finds the first matching rule and uses its variant
-distribution. If no rule matches, it uses the default distribution.
+distribution. If no rule matches, it uses the variants' default weights.
 
 ---
 
-## 12. Important evaluation behavior
+## 11. Important evaluation behavior
 
 The following rules should be consistent throughout the implementation.
 
@@ -1097,7 +1032,7 @@ For a Boolean flag:
 For a multivariate flag:
 
 - If a rule matches, use `rule_variants`.
-- If no rule matches, use `config_variants`.
+- If no rule matches, use each variant's `default_weight`.
 
 ### Step 5: Return the result
 
@@ -1123,34 +1058,32 @@ Multivariate response:
 
 ---
 
-## 13. Important implementation constraints
+## 12. Important implementation constraints
 
 Some rules are best enforced when creating or updating configurations.
 
-| Validation                          | Reason                                |
-| ----------------------------------- | ------------------------------------- |
-| Project API key ID is unique        | Allow lookup of a project by key      |
-| Flag key is unique within a project | Avoid ambiguous flag lookup           |
-| Variant key is unique within a flag | Avoid duplicate variant identifiers   |
-| Rollout is between 0 and 100        | Keep percentages valid                |
-| Variant weights are non-negative    | Prevent invalid allocations           |
-| Allocation weights sum to 100       | Ensure every bucket maps to a variant |
-| Rule priority is deterministic      | Ensure predictable rule selection     |
-| Variant belongs to the same flag    | Prevent cross-flag references         |
-| Boolean flags do not use variant    | Keep flag types consistent            |
-| allocations                         |                                       |
-| Multivariate flags have a valid     | Ensure unmatched users have a         |
-| default allocation                  | result                                |
+| Validation                                        | Reason                                         |
+| ------------------------------------------------- | ---------------------------------------------- |
+| Project API key ID is unique                      | Allow lookup of a project by key               |
+| Flag key is unique within a project               | Avoid ambiguous flag lookup                    |
+| Variant key is unique within a flag               | Avoid duplicate variant identifiers            |
+| Rollout is between 0 and 100                      | Keep percentages valid                         |
+| Variant weights are non-negative                  | Prevent invalid allocations                    |
+| Allocation weights sum to 100                     | Ensure every bucket maps to a variant          |
+| Rule priority is deterministic                    | Ensure predictable rule selection              |
+| Variant belongs to the same flag                  | Prevent cross-flag references                  |
+| Boolean flags do not use variant allocations      | Keep flag types consistent                     |
+| Default weights sum to 100 for multivariate flags | Ensure unmatched users always map to a variant |
 
 Validate weight totals in the application when saving an allocation. Use
 a database transaction when inserting or updating multiple allocation
-rows.
+rows, including the `default_weight` values of a flag's variants.
 
 For referential integrity, consider composite foreign keys or
 transactional application validation to ensure that a rule can only
 reference variants belonging to its own flag.
 
-## 14. Why we do not store individual user assignments
+## 13. Why we do not store individual user assignments
 
 For the initial implementation, we do not need a table containing every
 user's assigned flag value or variant.
@@ -1177,21 +1110,20 @@ A future version could introduce persisted assignments if we need to
 preserve experiment membership across allocation changes or support more
 advanced experimentation behavior.
 
-## 15. Final table responsibility reference
+## 14. Final table responsibility reference
 
 | Table             | Main responsibility                                                      |
 | ----------------- | ------------------------------------------------------------------------ |
 | `projects`        | Groups feature flags under an application                                |
 | `feature_flags`   | Defines a flag, its type, kill switch, and default Boolean configuration |
-| `flag_variants`   | Defines possible variants for multivariate flags                         |
+| `flag_variants`   | Defines possible variants and their default weights when no rule matches |
 | `targeting_rules` | Defines audience-specific behavior and evaluation priority               |
 | `rule_conditions` | Stores the individual conditions used to match an audience               |
 | `rule_variants`   | Defines variant weights for a matching targeting rule                    |
-| `config_variants` | Defines the default variant weights when no rule matches                 |
 
-## 17. Recommended implementation order
+## 15. Recommended implementation order
 
-Do not implement all seven tables and all evaluation behavior at once.
+Do not implement all six tables and all evaluation behavior at once.
 
 Build the system incrementally:
 
@@ -1201,7 +1133,7 @@ Build the system incrementally:
 3.  Add deterministic percentage rollout.
 4.  Add `targeting_rules` and `rule_conditions`.
 5.  Implement rule priority and condition evaluation.
-6.  Add `flag_variants` and `config_variants`.
+6.  Add `flag_variants`, including `default_weight`.
 7.  Implement multivariate evaluation.
 8.  Add `rule_variants` for targeted experiments.
 9.  Add caching so evaluations do not require several database queries
@@ -1214,7 +1146,7 @@ configuration.
 
 ---
 
-## 18. The most important distinction to remember
+## 16. The most important distinction to remember
 
 There are three different concepts in this schema:
 
@@ -1222,12 +1154,12 @@ There are three different concepts in this schema:
     exist.
 2.  **A rule is an audience.** `targeting_rules` and `rule_conditions`
     define who belongs to that audience.
-3.  **An allocation is a distribution.** `rule_variants` and
-    `config_variants` define how traffic is split among the available
-    choices.
+3.  **An allocation is a distribution.** `rule_variants` (per rule) and
+    `flag_variants.default_weight` (the default) define how traffic is
+    split among the available choices.
 
 For Boolean flags, the treatment and rollout are stored directly on the
 flag or targeting rule.
 
-Once these three concepts are clear, the purpose of all seven tables
+Once these three concepts are clear, the purpose of all six tables
 becomes much easier to understand.
