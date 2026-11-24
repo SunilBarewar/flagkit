@@ -13,7 +13,6 @@ export const featureFlags = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
-    /** What the SDK passes to evaluate the flag. Unique within a project. */
     key: text("key").notNull(),
     description: text("description"),
     type: flagTypeEnum("type").notNull(),
