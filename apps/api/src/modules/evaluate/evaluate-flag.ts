@@ -3,6 +3,7 @@ import { BadRequestError, ErrorCode, HttpStatus, NotFoundError } from "@flagkit/
 import {
   ApiErrorResponse,
   EvaluateFlagParams,
+  EvaluationContext,
   EvaluateFlagResponse,
   apiSuccessSchema,
 } from "@flagkit/shared/schemas";
@@ -13,14 +14,17 @@ import { successResponse } from "@/utils/response.ts";
 import { evaluateFlag } from "./evaluate.ts";
 
 export const evaluateFlagRoute: FastifyPluginAsyncZod = async (app) => {
-  app.get(
+  app.post(
     "/:flagKey",
     {
       schema: {
         tags: ["evaluate"],
-        summary: "Evaluate a boolean feature flag",
+        summary: "Evaluate a feature flag",
+        description:
+          "Send the user in the body. Their `userId` decides where they fall in a percentage rollout.",
         security: apiKeySecurity,
         params: EvaluateFlagParams,
+        body: EvaluationContext,
         response: {
           [HttpStatus.OK]: apiSuccessSchema(EvaluateFlagResponse),
           [HttpStatus.BAD_REQUEST]: ApiErrorResponse,
@@ -42,7 +46,7 @@ export const evaluateFlagRoute: FastifyPluginAsyncZod = async (app) => {
         });
       }
 
-      return successResponse("Flag evaluated", evaluateFlag(flag));
+      return successResponse("Flag evaluated", evaluateFlag(flag, request.body));
     },
   );
 };
