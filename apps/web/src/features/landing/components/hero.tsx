@@ -27,7 +27,7 @@ export function Hero() {
       <div className="pointer-events-none absolute -top-40 left-1/2 size-[40rem] -translate-x-1/2 rounded-full bg-brand-soft blur-3xl" />
 
       <div className="relative mx-auto max-w-6xl px-6 pt-20 pb-24 text-center sm:pt-28">
-        <span className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-card">
+        <span className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
           <span className="size-1.5 rounded-full bg-primary" />
           Feature flags, made simple
         </span>

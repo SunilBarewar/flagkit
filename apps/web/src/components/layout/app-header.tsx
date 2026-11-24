@@ -14,7 +14,7 @@ export function AppHeader() {
 
       <button
         type="button"
-        className="flex h-9 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground shadow-card hover:bg-accent/50"
+        className="flex h-9 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground hover:bg-accent/50"
       >
         <Search className="size-4" />
         <span className="flex-1 text-left">Search this project</span>

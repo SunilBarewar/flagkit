@@ -13,13 +13,13 @@ export function FlagsPage() {
   const toggle = useToggleFlag(project.id);
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <div className="flex items-center justify-between gap-4">
+    <main className="px-4 py-4">
+      <div className="flex min-h-10 items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Feature flags</h1>
         </div>
         {flags && flags.length > 0 && (
-          <Button asChild>
+          <Button asChild className="h-11">
             <Link to={paths.newFlag}>
               <Plus /> Create feature flag
             </Link>
@@ -46,7 +46,7 @@ export function FlagsPage() {
         {flags && flags.length === 0 && <FlagsEmptyState />}
 
         {flags && flags.length > 0 && (
-          <ul className="divide-y rounded-xl border bg-card shadow-card">
+          <ul className="divide-y rounded-xl border bg-card">
             {flags.map((flag) => (
               <FlagRow
                 key={flag.id}
