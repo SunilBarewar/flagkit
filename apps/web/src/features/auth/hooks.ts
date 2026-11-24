@@ -19,7 +19,7 @@ export function useAuthMutation(mode: AuthMode) {
     },
     onSuccess: (account) => {
       setSession(queryClient, account);
-      navigate(paths.home, { replace: true });
+      navigate(paths.dashboard, { replace: true });
     },
   });
 }

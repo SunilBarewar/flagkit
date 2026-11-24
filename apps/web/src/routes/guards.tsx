@@ -11,7 +11,6 @@ function FullPageSpinner() {
   );
 }
 
-
 export function ProtectedRoute() {
   const { data: account, isPending } = useSession();
   const location = useLocation();
@@ -25,6 +24,6 @@ export function GuestRoute() {
   const { data: account, isPending } = useSession();
 
   if (isPending) return <FullPageSpinner />;
-  if (account) return <Navigate to={paths.home} replace />;
+  if (account) return <Navigate to={paths.dashboard} replace />;
   return <Outlet />;
 }

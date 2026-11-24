@@ -1,11 +1,13 @@
 import { createBrowserRouter } from "react-router";
 import { LoginPage } from "@/features/auth/pages/login-page";
 import { SignupPage } from "@/features/auth/pages/signup-page";
+import { LandingPage } from "@/features/landing/pages/landing-page";
 import { CreateFlagPage } from "@/pages/create-flag-page";
 import { GuestRoute, ProtectedRoute } from "./guards";
 import { paths } from "./paths";
 
 export const router = createBrowserRouter([
+  { path: paths.landing, element: <LandingPage /> },
   {
     element: <GuestRoute />,
     children: [
@@ -15,6 +17,6 @@ export const router = createBrowserRouter([
   },
   {
     element: <ProtectedRoute />,
-    children: [{ path: paths.home, element: <CreateFlagPage /> }],
+    children: [{ path: paths.dashboard, element: <CreateFlagPage /> }],
   },
 ]);

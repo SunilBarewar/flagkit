@@ -1,6 +1,7 @@
 /** Every URL in the app, in one place. */
 export const paths = {
-  home: "/",
+  landing: "/",
   login: "/login",
   signup: "/signup",
+  dashboard: "/dashboard",
 } as const;
