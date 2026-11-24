@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/api";
+import type { CreateFlagInput } from "@/api";
 
 export const flagsKey = (projectId: string) => ["flags", projectId] as const;
 
@@ -16,6 +17,15 @@ export function useToggleFlag(projectId: string) {
   return useMutation({
     mutationFn: ({ flagId, isActive }: { flagId: string; isActive: boolean }) =>
       apiClient.flags.update(projectId, flagId, { isActive }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: flagsKey(projectId) }),
+  });
+}
+
+export function useCreateFlag(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: CreateFlagInput) => apiClient.flags.create(projectId, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: flagsKey(projectId) }),
   });
 }
