@@ -2,6 +2,7 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { accountProtectedRoutes, accountPublicRoutes } from "./accounts/index.ts";
 import { getMeRoute } from "./accounts/get-me.ts";
+import { evaluateRoutes } from "./evaluate/index.ts";
 import { flagProtectedRoutes } from "./flags/index.ts";
 import { healthRoutes } from "./health/index.ts";
 import { projectProtectedRoutes } from "./projects/index.ts";
@@ -11,6 +12,9 @@ export const registerRoutes: FastifyPluginAsyncZod = async (app) => {
   // Public routes: no session needed.
   app.register(healthRoutes);
   app.register(accountPublicRoutes, { prefix: "/accounts" });
+
+  // SDK routes: authenticated with the project API key instead of a session.
+  app.register(evaluateRoutes, { prefix: "/evaluate" });
 
   // Protected routes: every module registered in this scope requires a valid session cookie.
   app.register(async (protectedApp) => {
