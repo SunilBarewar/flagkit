@@ -29,6 +29,7 @@ export function registerApiDocs(app: FastifyInstance) {
         { name: "projects", description: "Projects" },
         { name: "flags", description: "Feature flags" },
         { name: "variants", description: "Variants of multivariate flags" },
+        { name: "rules", description: "Targeting rules: who a flag is rolled out to" },
       ],
     },
     transform: jsonSchemaTransform,

@@ -1,4 +1,4 @@
-import { findFeatureFlag, listFlagVariants } from "@flagkit/db";
+import { findFeatureFlag, listFlagVariants, listRulesWithConditions } from "@flagkit/db";
 import { ErrorCode, HttpStatus, NotFoundError } from "@flagkit/shared";
 import { FlagIdParams, FlagResponse, apiSuccessSchema } from "@flagkit/shared/schemas";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
@@ -28,9 +28,12 @@ export const getFlagRoute: FastifyPluginAsyncZod = async (app) => {
         throw new NotFoundError("Flag not found", { code: ErrorCode.NOT_FOUND });
       }
 
-      const variants = flag.type === "multivariate" ? await listFlagVariants(flag.id) : undefined;
+      const [rules, variants] = await Promise.all([
+        listRulesWithConditions(flag.id),
+        flag.type === "multivariate" ? listFlagVariants(flag.id) : undefined,
+      ]);
 
-      return successResponse("Flag fetched", toFlagResponse(flag, variants));
+      return successResponse("Flag fetched", toFlagResponse(flag, { rules, variants }));
     },
   );
 };

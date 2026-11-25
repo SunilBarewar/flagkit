@@ -1,9 +1,18 @@
-import type { FeatureFlag, FlagVariant } from "@flagkit/db";
+import type { FeatureFlag, FlagVariant, RuleWithConditions } from "@flagkit/db";
 import type { FlagResponse } from "@flagkit/shared/schemas";
 
+import { toRuleResponse } from "../rules/mappers.ts";
 import { toVariantResponse } from "../variants/mappers.ts";
 
-export function toFlagResponse(flag: FeatureFlag, variants?: FlagVariant[]): FlagResponse {
+interface FlagDetails {
+  rules?: RuleWithConditions[];
+  variants?: FlagVariant[];
+}
+
+export function toFlagResponse(
+  flag: FeatureFlag,
+  { rules, variants }: FlagDetails = {},
+): FlagResponse {
   return {
     id: flag.id,
     projectId: flag.projectId,
@@ -11,7 +20,7 @@ export function toFlagResponse(flag: FeatureFlag, variants?: FlagVariant[]): Fla
     description: flag.description,
     type: flag.type,
     enabled: flag.enabled,
-    rolloutPercentage: flag.rolloutPercentage,
+    ...(rules && { rules: rules.map(toRuleResponse) }),
     ...(variants && { variants: variants.map(toVariantResponse) }),
     createdAt: flag.createdAt.toISOString(),
     updatedAt: flag.updatedAt.toISOString(),

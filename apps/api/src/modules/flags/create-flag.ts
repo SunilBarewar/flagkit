@@ -3,6 +3,7 @@ import { HttpStatus } from "@flagkit/shared";
 import {
   ApiErrorResponse,
   CreateFlagBody,
+  DEFAULT_RULES,
   FlagResponse,
   ProjectIdParams,
   apiSuccessSchema,
@@ -11,6 +12,7 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { protectedErrorResponses, security } from "@/common/responses.ts";
 import { successResponse } from "@/utils/response.ts";
+import { assertRulesFitFlag } from "../rules/validate-rules.ts";
 import { toFlagResponse } from "./mappers.ts";
 
 export const createFlagRoute: FastifyPluginAsyncZod = async (app) => {
@@ -21,7 +23,7 @@ export const createFlagRoute: FastifyPluginAsyncZod = async (app) => {
         tags: ["flags"],
         summary: "Create a feature flag",
         description:
-          "New flags start disabled unless you enable them. The key must be unique within the project. A multivariate flag is created with its variants, which need at least 2 entries and rollout percentages adding up to 100.",
+          "New flags start disabled unless you enable them. The key must be unique within the project. A multivariate flag is created with its variants, which need at least 2 entries and rollout percentages adding up to 100. Without `rules`, the flag gets one rule with no conditions at 0%, so it reaches nobody until you edit it.",
         security,
         params: ProjectIdParams,
         body: CreateFlagBody,
@@ -36,16 +38,23 @@ export const createFlagRoute: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       const { projectId } = request.params;
       const body = request.body;
+      const rules = body.rules ?? DEFAULT_RULES;
+
+      assertRulesFitFlag(
+        rules,
+        body.type,
+        body.type === "multivariate" ? body.variants.map((variant) => variant.key) : [],
+      );
 
       // A taken key throws a Postgres unique violation, which the error handler maps to a 409.
-      const { flag, variants } =
+      const created =
         body.type === "multivariate"
-          ? await insertMultivariateFeatureFlag({ ...body, projectId }, body.variants)
-          : { flag: await insertFeatureFlag({ ...body, projectId }), variants: undefined };
+          ? await insertMultivariateFeatureFlag({ ...body, projectId }, body.variants, rules)
+          : { ...(await insertFeatureFlag({ ...body, projectId }, rules)), variants: undefined };
 
       return reply
         .code(HttpStatus.CREATED)
-        .send(successResponse("Flag created", toFlagResponse(flag, variants)));
+        .send(successResponse("Flag created", toFlagResponse(created.flag, created)));
     },
   );
 };

@@ -2,6 +2,7 @@ import { findProjectByIdAndAccountId } from "@flagkit/db";
 import { ErrorCode, NotFoundError } from "@flagkit/shared";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
+import { ruleProtectedRoutes } from "../rules/index.ts";
 import { variantProtectedRoutes } from "../variants/index.ts";
 import { createFlagRoute } from "./create-flag.ts";
 import { deleteFlagRoute } from "./delete-flag.ts";
@@ -33,4 +34,5 @@ export const flagProtectedRoutes: FastifyPluginAsyncZod = async (app) => {
   app.register(updateFlagRoute);
   app.register(deleteFlagRoute);
   app.register(variantProtectedRoutes, { prefix: "/:flagId/variants" });
+  app.register(ruleProtectedRoutes, { prefix: "/:flagId/rules" });
 };

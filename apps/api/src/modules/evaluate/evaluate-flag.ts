@@ -1,4 +1,4 @@
-import { findFeatureFlagByKey } from "@flagkit/db";
+import { findFeatureFlagByKey, listRulesWithConditions } from "@flagkit/db";
 import { BadRequestError, ErrorCode, HttpStatus, NotFoundError } from "@flagkit/shared";
 import {
   ApiErrorResponse,
@@ -21,7 +21,7 @@ export const evaluateFlagRoute: FastifyPluginAsyncZod = async (app) => {
         tags: ["evaluate"],
         summary: "Evaluate a feature flag",
         description:
-          "Send the user in the body. Their `userId` decides where they fall in a percentage rollout.",
+          "Send the user in the body. Their `properties` are matched against the flag's targeting rules, and their `userId` decides where they fall in a rule's percentage rollout.",
         security: apiKeySecurity,
         params: EvaluateFlagParams,
         body: EvaluationContext,
@@ -46,7 +46,9 @@ export const evaluateFlagRoute: FastifyPluginAsyncZod = async (app) => {
         });
       }
 
-      return successResponse("Flag evaluated", evaluateFlag(flag, request.body));
+      const rules = await listRulesWithConditions(flag.id);
+
+      return successResponse("Flag evaluated", evaluateFlag(flag, rules, request.body));
     },
   );
 };
