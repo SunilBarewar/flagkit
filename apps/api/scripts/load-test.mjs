@@ -2,14 +2,13 @@
 //
 //   API_KEY=fk_... FLAG_KEY=checkout pnpm load-test
 //
-// Optional env: API_URL (http://localhost:8000), CONNECTIONS (50), DURATION (15, seconds),
+// Optional env: API_URL (http://localhost:8000), CONNECTIONS (10), DURATION (10, seconds),
 // PIPELINING (1), USERS (how many distinct userIds to spread requests over), and
 // RATE (requests per second to send in total, e.g. RATE=500). Without RATE it sends as fast as
 // the server answers, which measures the maximum.
 // Every request sends a different user, so the rollout hashing runs for real users
 // instead of one cached answer. Point it at a local or staging server, never production.
-import { execSync } from "node:child_process";
-import { createRequire } from "node:module";
+import autocannon from "autocannon";
 
 const env = (name, fallback) => process.env[name] ?? fallback;
 const apiKey = env("API_KEY");
@@ -19,18 +18,6 @@ if (!apiKey || !flagKey) {
   console.error("Set API_KEY and FLAG_KEY, e.g. API_KEY=fk_... FLAG_KEY=checkout pnpm load-test");
   process.exit(1);
 }
-
-// autocannon is installed globally, so fall back to the global node_modules if it isn't local.
-function loadAutocannon() {
-  const require = createRequire(import.meta.url);
-  try {
-    return require("autocannon");
-  } catch {
-    const globalRoot = execSync("npm root -g").toString().trim();
-    return createRequire(`${globalRoot}/`)("autocannon");
-  }
-}
-const autocannon = loadAutocannon();
 
 const baseUrl = env("API_URL", "http://localhost:8000");
 const users = Number(env("USERS", 1_000));
