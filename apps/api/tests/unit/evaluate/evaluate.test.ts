@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateFlag,
+  explainEvaluation,
   getBucket,
   getVariantBucket,
   matchesCondition,
@@ -389,5 +390,125 @@ describe("evaluateFlag for a multivariate flag", () => {
       key: "checkout",
       enabled: true,
     });
+  });
+});
+
+describe("explainEvaluation", () => {
+  const boolFlag = { key: "checkout", enabled: true, type: "boolean" as const };
+  const mvFlag = { key: "checkout", enabled: true, type: "multivariate" as const };
+  const rule = (patch: Partial<EvaluableRule> = {}): EvaluableRule => ({
+    enabled: true,
+    rolloutPercentage: 100,
+    conditions: [],
+    ...patch,
+  });
+  const variants: EvaluableVariant[] = [
+    { key: "control", rolloutPercentage: 50, payload: null },
+    { key: "blue", rolloutPercentage: 50, payload: { theme: "blue" } },
+  ];
+  const india: EvaluableCondition = { attribute: "country", operator: "equals", value: "IN" };
+
+  it("always agrees with evaluateFlag", () => {
+    const rulesets: EvaluableRule[][] = [
+      [],
+      [rule({ rolloutPercentage: 0 })],
+      [rule({ conditions: [india], rolloutPercentage: 30 }), rule({ rolloutPercentage: 60 })],
+      [rule({ enabled: false }), rule({ variantKey: "blue", rolloutPercentage: 40 })],
+    ];
+
+    for (const flag of [boolFlag, mvFlag, { ...mvFlag, enabled: false }]) {
+      for (const rules of rulesets) {
+        for (let i = 0; i < 100; i++) {
+          const ctx = context(`user_${i}`, i % 2 ? { country: "IN" } : {});
+          expect(explainEvaluation(flag, rules, ctx, variants).result).toEqual(
+            evaluateFlag(flag, rules, ctx, variants),
+          );
+        }
+      }
+    }
+  });
+
+  it("reports the user's buckets", () => {
+    const { trace } = explainEvaluation(mvFlag, [rule()], context("user_1"), variants);
+
+    expect(trace.bucket).toBe(32);
+    expect(trace.variantBucket).toBe(69);
+    expect(trace.variantSource).toBe("split");
+    expect(trace.reason).toBe("passed");
+  });
+
+  it("explains why each rule did or didn't pass", () => {
+    const rules = [
+      rule({ enabled: false }),
+      rule({ conditions: [india] }),
+      // user_1 is in bucket 32, outside 10%.
+      rule({ rolloutPercentage: 10 }),
+      rule({ rolloutPercentage: 50 }),
+      rule(),
+    ];
+    const { trace } = explainEvaluation(boolFlag, rules, context("user_1", { country: "US" }));
+
+    expect(trace.rules.map((r) => r.status)).toEqual([
+      "turned_off",
+      "conditions_not_matched",
+      "missed_rollout",
+      "passed",
+      "not_reached",
+    ]);
+  });
+
+  it("shows what the user sent for each condition and whether it matched", () => {
+    const { trace } = explainEvaluation(
+      boolFlag,
+      [rule({ conditions: [india, { attribute: "plan", operator: "equals", value: "pro" }] })],
+      context("u", { country: "IN" }),
+    );
+
+    expect(trace.rules[0]!.conditions).toEqual([
+      { attribute: "country", operator: "equals", value: "IN", actual: "IN", matched: true },
+      { attribute: "plan", operator: "equals", value: "pro", actual: null, matched: false },
+    ]);
+  });
+
+  it("marks every rule as not reached when the flag is disabled", () => {
+    const { result, trace } = explainEvaluation(
+      { ...boolFlag, enabled: false },
+      [rule()],
+      context("u"),
+    );
+
+    expect(result.enabled).toBe(false);
+    expect(trace.reason).toBe("flag_disabled");
+    expect(trace.rules[0]!.status).toBe("not_reached");
+  });
+
+  it("says when no rule passed", () => {
+    expect(
+      explainEvaluation(boolFlag, [rule({ rolloutPercentage: 0 })], context("u")).trace.reason,
+    ).toBe("no_rule_passed");
+  });
+
+  it("reports a forced variant without a variant bucket", () => {
+    const { trace } = explainEvaluation(
+      mvFlag,
+      [rule({ variantKey: "blue" })],
+      context("u"),
+      variants,
+    );
+
+    expect(trace.variantSource).toBe("forced");
+    expect(trace.variantBucket).toBeNull();
+  });
+
+  it("says when a rule passed but no variant could be chosen", () => {
+    const { result, trace } = explainEvaluation(
+      mvFlag,
+      [rule({ variantKey: "deleted" })],
+      context("u"),
+      variants,
+    );
+
+    expect(result.enabled).toBe(false);
+    expect(trace.reason).toBe("no_variant");
   });
 });

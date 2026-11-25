@@ -3,6 +3,7 @@ import type {
   ConditionOperator,
   EvaluateFlagResponse,
   EvaluationContext,
+  EvaluationTrace,
 } from "@flagkit/shared/schemas";
 import { createHash } from "node:crypto";
 
@@ -27,7 +28,22 @@ export interface EvaluableVariant {
 }
 
 /**
- * Evaluates a flag for one user. Pure: no I/O, so it is trivial to test.
+ * Evaluates a flag for one user and returns only the answer. See `explainEvaluation`.
+ */
+export function evaluateFlag(
+  flag: Pick<FeatureFlag, "key" | "enabled" | "type">,
+  rules: EvaluableRule[],
+  context: EvaluationContext,
+  variants: EvaluableVariant[] = [],
+): EvaluateFlagResponse {
+  return explainEvaluation(flag, rules, context, variants).result;
+}
+
+type TraceRule = EvaluationTrace["rules"][number];
+
+/**
+ * Evaluates a flag for one user and also reports how it got there. Pure: no I/O, so it is
+ * trivial to test.
  *
  * A disabled flag is off for everyone. Otherwise the first enabled rule the user passes decides:
  * they match all of its conditions (a rule with none matches everyone) and their bucket is inside
@@ -38,40 +54,84 @@ export interface EvaluableVariant {
  * one by the variants' percentages. `rules` must be in priority order and `variants` in a stable
  * order, so the same user keeps the same variant.
  */
-export function evaluateFlag(
+export function explainEvaluation(
   flag: Pick<FeatureFlag, "key" | "enabled" | "type">,
   rules: EvaluableRule[],
   context: EvaluationContext,
   variants: EvaluableVariant[] = [],
-): EvaluateFlagResponse {
+): { result: EvaluateFlagResponse; trace: EvaluationTrace } {
+  const bucket = getBucket(context.userId, flag.key);
+
+  let passedIndex = -1;
+  const ruleTraces: TraceRule[] = rules.map((rule, index) => {
+    const conditions = rule.conditions.map((condition) => ({
+      attribute: condition.attribute,
+      operator: condition.operator,
+      value: condition.value as TraceRule["conditions"][number]["value"],
+      actual: context.properties[condition.attribute] ?? null,
+      matched: matchesCondition(condition, context.properties),
+    }));
+
+    let status: TraceRule["status"];
+    if (!flag.enabled || passedIndex !== -1) status = "not_reached";
+    else if (!rule.enabled) status = "turned_off";
+    else if (!conditions.every((condition) => condition.matched)) status = "conditions_not_matched";
+    else if (bucket >= rule.rolloutPercentage) status = "missed_rollout";
+    else {
+      status = "passed";
+      passedIndex = index;
+    }
+
+    return {
+      status,
+      enabled: rule.enabled,
+      rolloutPercentage: rule.rolloutPercentage,
+      variantKey: rule.variantKey ?? null,
+      conditions,
+    };
+  });
+
   const off: EvaluateFlagResponse =
     flag.type === "multivariate"
       ? { key: flag.key, enabled: false, variant: null, payload: null }
       : { key: flag.key, enabled: false };
+  const trace = (patch: Partial<EvaluationTrace>): EvaluationTrace => ({
+    reason: "passed",
+    bucket,
+    variantBucket: null,
+    variantSource: null,
+    rules: ruleTraces,
+    ...patch,
+  });
 
-  if (!flag.enabled) return off;
+  if (!flag.enabled) return { result: off, trace: trace({ reason: "flag_disabled" }) };
 
-  const bucket = getBucket(context.userId, flag.key);
-  const rule = rules.find(
-    (candidate) =>
-      candidate.enabled &&
-      bucket < candidate.rolloutPercentage &&
-      candidate.conditions.every((condition) => matchesCondition(condition, context.properties)),
-  );
-  if (!rule) return off;
+  const rule = rules[passedIndex];
+  if (!rule) return { result: off, trace: trace({ reason: "no_rule_passed" }) };
 
-  if (flag.type !== "multivariate") return { key: flag.key, enabled: true };
+  if (flag.type !== "multivariate") {
+    return { result: { key: flag.key, enabled: true }, trace: trace({}) };
+  }
 
-  const variant = rule.variantKey
+  const forced = Boolean(rule.variantKey);
+  const variantBucket = forced ? null : getVariantBucket(context.userId, flag.key);
+  const variant = forced
     ? variants.find((candidate) => candidate.key === rule.variantKey)
-    : pickVariant(variants, getVariantBucket(context.userId, flag.key));
-  if (!variant) return off;
+    : pickVariant(variants, variantBucket!);
+  const variantTrace = { variantBucket, variantSource: forced ? "forced" : "split" } as const;
+
+  if (!variant) {
+    return { result: off, trace: trace({ reason: "no_variant", ...variantTrace }) };
+  }
 
   return {
-    key: flag.key,
-    enabled: true,
-    variant: variant.key,
-    payload: variant.payload as EvaluateFlagResponse["payload"],
+    result: {
+      key: flag.key,
+      enabled: true,
+      variant: variant.key,
+      payload: variant.payload as EvaluateFlagResponse["payload"],
+    },
+    trace: trace(variantTrace),
   };
 }
 

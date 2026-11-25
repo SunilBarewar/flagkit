@@ -8,6 +8,7 @@ import { createFlagRoute } from "./create-flag.ts";
 import { deleteFlagRoute } from "./delete-flag.ts";
 import { getFlagRoute } from "./get-flag.ts";
 import { listFlagsRoute } from "./list-flags.ts";
+import { testFlagRoute } from "./test-flag.ts";
 import { updateFlagRoute } from "./update-flag.ts";
 
 /**
@@ -33,6 +34,7 @@ export const flagProtectedRoutes: FastifyPluginAsyncZod = async (app) => {
   app.register(getFlagRoute);
   app.register(updateFlagRoute);
   app.register(deleteFlagRoute);
+  app.register(testFlagRoute);
   app.register(variantProtectedRoutes, { prefix: "/:flagId/variants" });
   app.register(ruleProtectedRoutes, { prefix: "/:flagId/rules" });
 };
