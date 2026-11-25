@@ -989,6 +989,9 @@ Multivariate response:
 }
 ```
 
+A multivariate flag that is disabled, or that the user passes no rule for,
+returns `"enabled": false` with `"variant": null` and `"payload": null`.
+
 ---
 
 ## 11. Important implementation constraints
