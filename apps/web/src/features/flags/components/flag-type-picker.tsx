@@ -1,4 +1,4 @@
-import { Check, Flag, ListTree, SquareCode } from "lucide-react";
+import { Check, Flag, ListTree } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { FlagType } from "@flagkit/shared/schemas";
 import { cn } from "@/lib/utils";
@@ -25,14 +25,7 @@ const options: FlagTypeOption[] = [
     description: "Multiple variants with rollout percentages (A/B/n test)",
     icon: ListTree,
     available: true,
-  },
-  {
-    id: "remote-config",
-    title: "Remote config",
-    description: "A single payload without feature flag logic",
-    icon: SquareCode,
-    available: false,
-  },
+  }
 ];
 
 interface FlagTypePickerProps {
