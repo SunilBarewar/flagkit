@@ -8,13 +8,37 @@ import { Button } from "@/components/ui/button";
 import { projectsKey, useProjects } from "./hooks";
 import { ProjectContext } from "./project-context";
 
+const SELECTED_PROJECT_KEY = "flagkit.selectedProjectId";
+
+// Storage can be blocked or full (private windows, strict settings), and the app works without it.
+function readSelectedId(): string | null {
+  try {
+    return localStorage.getItem(SELECTED_PROJECT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeSelectedId(id: string) {
+  try {
+    localStorage.setItem(SELECTED_PROJECT_KEY, id);
+  } catch {
+    // Not remembered after a reload, nothing else breaks.
+  }
+}
+
 /**
- * Loads the account's projects and selects the default one. Children only render once a
- * project is selected, so they can rely on `useCurrentProject()`.
+ * Loads the account's projects and selects the one the user last picked in this browser, or the default.
+ * Children only render once a project is selected, so they can rely on `useCurrentProject()`.
  */
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const { data: projects, isPending, isError, refetch } = useProjects();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(readSelectedId);
+
+  const select = (id: string) => {
+    setSelectedId(id);
+    writeSelectedId(id);
+  };
 
   if (isPending)
     return (
@@ -34,6 +58,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  // A remembered project that is gone, or belongs to another account, falls back to the default.
   const project =
     projects.find((p) => p.id === selectedId) ??
     projects.find((p) => p.name === DEFAULT_PROJECT_NAME) ??
@@ -42,9 +67,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   // Accounts created before every signup got a default project.
   if (!project) return <CreateDefaultProject />;
 
-  return (
-    <ProjectContext value={{ project, projects, select: setSelectedId }}>{children}</ProjectContext>
-  );
+  return <ProjectContext value={{ project, projects, select }}>{children}</ProjectContext>;
 }
 
 function FullPage({ children }: { children: ReactNode }) {
