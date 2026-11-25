@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/api";
 import type { CreateFlagInput } from "@/api";
-import type { UpdateFlagBody, VariantInput } from "@flagkit/shared/schemas";
+import type { ReplaceRulesInput, UpdateFlagBody, VariantInput } from "@flagkit/shared/schemas";
 
 export const flagsKey = (projectId: string) => ["flags", projectId] as const;
 
@@ -44,15 +44,18 @@ interface SaveFlagInput {
   body: UpdateFlagBody;
   /** Only for multivariate flags: the flag's complete set of variants. */
   variants?: VariantInput[];
+  /** The flag's complete list of rules, when they are being changed. */
+  rules?: ReplaceRulesInput["rules"];
 }
 
 export function useSaveFlag(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    // Variants first: they are the part that can be rejected (weights must add up to 100).
-    mutationFn: async ({ flagId, body, variants }: SaveFlagInput) => {
+    // Variants and rules first: they are the parts that can be rejected.
+    mutationFn: async ({ flagId, body, variants, rules }: SaveFlagInput) => {
       if (variants) await apiClient.flags.replaceVariants(projectId, flagId, variants);
+      if (rules) await apiClient.flags.replaceRules(projectId, flagId, rules);
       return apiClient.flags.update(projectId, flagId, body);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: flagsKey(projectId) }),

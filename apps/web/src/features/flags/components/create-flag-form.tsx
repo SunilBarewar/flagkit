@@ -35,7 +35,7 @@ export function CreateFlagForm() {
   const navigate = useNavigate();
   const create = useCreateFlag(project.id);
   const [enabled, setEnabled] = useState(true);
-  const [rollout, setRollout] = useState(100);
+  const [rollout, setRollout] = useState(0);
   const [type, setType] = useState<FlagType>("boolean");
   const [variants, setVariants] = useState(initialVariants);
   const [variantsError, setVariantsError] = useState<string>();
@@ -51,7 +51,13 @@ export function CreateFlagForm() {
   const key = useWatch({ control, name: "key" });
 
   const onSubmit = handleSubmit((values) => {
-    const common = { key: values.key, description: values.description || undefined, enabled };
+    const common = {
+      key: values.key,
+      description: values.description || undefined,
+      enabled,
+      // One rule matching everyone: the flag's rollout. Release conditions replace this soon.
+      rules: [{ rolloutPercentage: rollout, conditions: [] }],
+    };
     let body: CreateFlagInput;
 
     if (type === "multivariate") {
@@ -67,7 +73,7 @@ export function CreateFlagForm() {
         return;
       }
     } else {
-      body = { ...common, type, rolloutPercentage: rollout };
+      body = { ...common, type };
     }
     setVariantsError(undefined);
 
@@ -179,7 +185,7 @@ export function CreateFlagForm() {
             <FlagTypePicker value={type} onChange={setType} />
           </Card>
 
-          {type === "multivariate" ? (
+          {type === "multivariate" && (
             <Card title="Variants" hint="The values the flag can return">
               <VariantsEditor variants={variants} onChange={setVariants} />
               {variantsError && (
@@ -188,9 +194,9 @@ export function CreateFlagForm() {
                 </p>
               )}
             </Card>
-          ) : (
-            <RolloutCard rollout={rollout} onRolloutChange={setRollout} enabled={enabled} />
           )}
+
+          <RolloutCard rollout={rollout} onRolloutChange={setRollout} enabled={enabled} />
         </div>
       </form>
     </>

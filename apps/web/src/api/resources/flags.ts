@@ -2,6 +2,8 @@ import type {
   CreateFlagInput,
   FlagResponse,
   PaginationQuery,
+  ReplaceRulesInput,
+  RuleResponse,
   UpdateFlagBody,
   VariantInput,
   VariantResponse,
@@ -24,6 +26,13 @@ export const flags = {
 
   update: (projectId: string, flagId: string, body: UpdateFlagBody) =>
     request<FlagResponse>({ method: "PATCH", url: `${base(projectId)}/${flagId}`, data: body }),
+
+  replaceRules: (projectId: string, flagId: string, rules: ReplaceRulesInput["rules"]) =>
+    request<RuleResponse[]>({
+      method: "PUT",
+      url: `${base(projectId)}/${flagId}/rules`,
+      data: { rules },
+    }),
 
   replaceVariants: (projectId: string, flagId: string, variants: VariantInput[]) =>
     request<VariantResponse[]>({

@@ -32,7 +32,12 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
   const navigate = useNavigate();
   const save = useSaveFlag(project.id);
   const [enabled, setEnabled] = useState(flag.enabled);
-  const [rollout, setRollout] = useState(flag.rolloutPercentage);
+  // The rollout card edits one rule that matches everyone. Flags with other rules keep them.
+  const rules = flag.rules ?? [];
+  const defaultRule = rules.length === 1 ? rules[0] : undefined;
+  const hasDefaultRuleOnly =
+    !!defaultRule && defaultRule.conditions.length === 0 && !defaultRule.variantKey;
+  const [rollout, setRollout] = useState(defaultRule?.rolloutPercentage ?? 0);
   const [variants, setVariants] = useState(() => toVariantDrafts(flag.variants ?? []));
   const [variantsError, setVariantsError] = useState<string>();
   const multivariate = flag.type === "multivariate";
@@ -50,7 +55,6 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
     const body = {
       description: values.description?.trim() || null,
       enabled,
-      ...(!multivariate && { rolloutPercentage: rollout }),
     };
 
     let variantInputs;
@@ -70,7 +74,14 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
     setVariantsError(undefined);
 
     save.mutate(
-      { flagId: flag.id, body, variants: variantInputs },
+      {
+        flagId: flag.id,
+        body,
+        variants: variantInputs,
+        rules: hasDefaultRuleOnly
+          ? [{ enabled: defaultRule.enabled, rolloutPercentage: rollout, conditions: [] }]
+          : undefined,
+      },
       { onSuccess: () => navigate(paths.dashboard) },
     );
   });
@@ -158,18 +169,29 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
           </div>
         </Card>
 
-        {multivariate ? (
-          <Card title="Variants" hint="The values the flag can return">
-            <VariantsEditor variants={variants} onChange={setVariants} />
-            {variantsError && (
-              <p role="alert" className="mt-3 text-sm text-destructive">
-                {variantsError}
+        <div className="space-y-4">
+          {multivariate && (
+            <Card title="Variants" hint="The values the flag can return">
+              <VariantsEditor variants={variants} onChange={setVariants} />
+              {variantsError && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {variantsError}
+                </p>
+              )}
+            </Card>
+          )}
+
+          {hasDefaultRuleOnly ? (
+            <RolloutCard rollout={rollout} onRolloutChange={setRollout} enabled={enabled} />
+          ) : (
+            <Card title="Release conditions">
+              <p className="text-muted-foreground">
+                This flag has {rules.length} targeting rules. Editing them here is coming soon, and
+                saving keeps them as they are.
               </p>
-            )}
-          </Card>
-        ) : (
-          <RolloutCard rollout={rollout} onRolloutChange={setRollout} enabled={enabled} />
-        )}
+            </Card>
+          )}
+        </div>
       </form>
     </>
   );
