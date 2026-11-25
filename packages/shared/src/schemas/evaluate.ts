@@ -24,8 +24,14 @@ export const EvaluationContext = z.object({
 });
 export type EvaluationContext = z.infer<typeof EvaluationContext>;
 
+/**
+ * Boolean flags return `key` and `enabled`. Multivariate flags also return the chosen `variant`
+ * and its `payload`, both null when the flag is off for the user.
+ */
 export const EvaluateFlagResponse = z.object({
   key: z.string(),
   enabled: z.boolean(),
+  variant: z.string().nullable().optional(),
+  payload: z.json().nullable().optional(),
 });
 export type EvaluateFlagResponse = z.infer<typeof EvaluateFlagResponse>;
