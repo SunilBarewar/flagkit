@@ -22,7 +22,7 @@ The V1 design deliberately keeps the system small:
 - There is no separate `flag_configs` or default-allocation table. A flag has one
   configuration, stored directly on `feature_flags`. The default
   variant distribution of a multivariate flag is stored on the variants
-  themselves, as `flag_variants.default_weight`.
+  themselves, as `flag_variants.rollout_percentage`.
 - The system supports Boolean and multivariate flags.
 - Targeting rules match user properties supplied by the customer's
   application.
@@ -100,7 +100,7 @@ The default treatment is used when no targeting rule matches.
   `feature_flags`: that share of the users who reach the default
   treatment get `true`, and the rest get `false`.
 - For a multivariate flag, it is controlled by the
-  `default_weight` of each row in `flag_variants`.
+  `rollout_percentage` of each row in `flag_variants`.
 
 This distinction is important: the default Boolean settings and the
 default multivariate allocation are two different ways of describing the
@@ -324,8 +324,8 @@ For example, a homepage experiment might have:
 - `green`
 
 The variants define the possible outcomes. Each variant also stores its
-`default_weight`: the share of users who receive it when no targeting
-rule matches. Weights for targeted audiences are stored separately in
+`rollout_percentage`: the share of users who receive it when no targeting
+rule matches. Percentages for targeted audiences are stored separately in
 `rule_variants`.
 
 ### Why do we need it?
@@ -336,41 +336,41 @@ rather than just `true` or `false`.
 Keeping variants in their own table means the same set of variants can
 be referenced by the allocations attached to different targeting rules.
 The default allocation is stored directly on each variant as
-`default_weight`, because it is a single number per variant with no
+`rollout_percentage`, because it is a single number per variant with no
 other dimension.
 
 ### Suggested columns
 
-| Column           | Type      | Purpose                                                  |
-| ---------------- | --------- | -------------------------------------------------------- |
-| `id`             | UUID      | Primary key                                              |
-| `flag_id`        | UUID      | References `feature_flags.id`                            |
-| `key`            | VARCHAR   | Stable variant identifier                                |
-| `name`           | VARCHAR   | Human-readable variant name                              |
-| `payload`        | JSONB     | Optional data returned with the variant                  |
-| `default_weight` | INTEGER   | Weight (0-100) when no targeting rule matches, default 0 |
-| `created_at`     | TIMESTAMP | Creation time                                            |
+| Column               | Type      | Purpose                                                      |
+| -------------------- | --------- | ------------------------------------------------------------ |
+| `id`                 | UUID      | Primary key                                                  |
+| `flag_id`            | UUID      | References `feature_flags.id`                                |
+| `key`                | VARCHAR   | Stable variant identifier                                    |
+| `description`        | TEXT      | Optional explanation                                         |
+| `payload`            | JSONB     | Optional data returned with the variant                      |
+| `rollout_percentage` | INTEGER   | Percentage (0-100) when no targeting rule matches, default 0 |
+| `created_at`         | TIMESTAMP | Creation time                                                |
 
 Example variants:
 
-| key       | name        | payload               | default_weight |
-| --------- | ----------- | --------------------- | -------------: |
-| `control` | Control     | `{"theme":"default"}` |             50 |
-| `blue`    | Blue Theme  | `{"theme":"blue"}`    |             25 |
-| `green`   | Green Theme | `{"theme":"green"}`   |             25 |
+| key       | description | payload               | rollout_percentage |
+| --------- | ----------- | --------------------- | -----------------: |
+| `control` | Current UI  | `{"theme":"default"}` |                 50 |
+| `blue`    | Blue theme  | `{"theme":"blue"}`    |                 25 |
+| `green`   | Green theme | `{"theme":"green"}`   |                 25 |
 
 This means users who match no targeting rule receive `control` 50% of
-the time, `blue` 25% and `green` 25%. The default weights of a flag's
+the time, `blue` 25% and `green` 25%. The default percentages of a flag's
 variants must sum to 100.
 
-### What is `default_weight` used for?
+### What is `rollout_percentage` used for?
 
 It replaces a separate default-allocation table. When no targeting rule
 matches, the engine loads the flag's variants and uses deterministic
-hashing to pick one according to their `default_weight` values.
+hashing to pick one according to their `rollout_percentage` values.
 
 It is a plain integer column rather than JSON so that the database can
-enforce the 0-100 range, and so that a weight can never point at a
+enforce the 0-100 range, and so that a percentage can never point at a
 variant of another flag. `payload` stays reserved for data returned to
 the application, not allocation settings.
 
@@ -400,7 +400,7 @@ The application decides how to use that data.
 - One feature flag can have many variants.
 - A variant belongs to exactly one feature flag.
 - A variant can be referenced by multiple `rule_variants` rows.
-- A variant carries its own default weight.
+- A variant carries its own default rollout percentage.
 
 Relationships:
 
@@ -411,21 +411,21 @@ Recommended constraint:
 
 ```sql
 UNIQUE (flag_id, key)
-CHECK (default_weight BETWEEN 0 AND 100)
+CHECK (rollout_percentage BETWEEN 0 AND 100)
 ```
 
 ### When is it used?
 
 1.  When a user creates a multivariate flag, they define its variants.
-2.  Each variant is given a `default_weight`, which defines the
+2.  Each variant is given a `rollout_percentage`, which defines the
     distribution for the default audience.
-3.  They can also be assigned different weights in `rule_variants` for
+3.  They can also be assigned different percentages in `rule_variants` for
     particular targeting rules.
 4.  During evaluation, the engine selects one variant from the relevant
-    weighted allocation and returns its key and payload.
+    allocation and returns its key and payload.
 
-Important: a new variant starts with `default_weight = 0`, so it
-receives no default traffic until a weight is set. Targeting rules need
+Important: a new variant starts with `rollout_percentage = 0`, so it
+receives no default traffic until a percentage is set. Targeting rules need
 their own `rule_variants` rows.
 
 ---
@@ -748,7 +748,7 @@ The service does not need to query the customer's user database.
 
 ### What does this table represent?
 
-`rule_variants` stores the weighted variant distribution for a
+`rule_variants` stores the variant distribution for a
 particular targeting rule.
 
 It is used for multivariate flags.
@@ -776,28 +776,28 @@ For example:
 | Everyone else |    100% |        0% |
 
 The variants themselves are defined once in `flag_variants`. Their
-audience-specific weights belong in `rule_variants`.
+audience-specific percentages belong in `rule_variants`.
 
 This separation avoids duplicating variant definitions for every rule.
 
 ### Suggested columns
 
-| Column       | Type    | Purpose                         |
-| ------------ | ------- | ------------------------------- |
-| `id`         | UUID    | Primary key                     |
-| `rule_id`    | UUID    | References `targeting_rules.id` |
-| `variant_id` | UUID    | References `flag_variants.id`   |
-| `weight`     | INTEGER | Weight for this variant         |
+| Column               | Type    | Purpose                             |
+| -------------------- | ------- | ----------------------------------- |
+| `id`                 | UUID    | Primary key                         |
+| `rule_id`            | UUID    | References `targeting_rules.id`     |
+| `variant_id`         | UUID    | References `flag_variants.id`       |
+| `rollout_percentage` | INTEGER | Percentage (0-100) for this variant |
 
 Example records:
 
-| rule_id      | variant_id        | weight |
-| ------------ | ----------------- | -----: |
-| `india_rule` | `control_variant` |     50 |
-| `india_rule` | `blue_variant`    |     30 |
-| `india_rule` | `green_variant`   |     20 |
+| rule_id      | variant_id        | rollout_percentage |
+| ------------ | ----------------- | -----------------: |
+| `india_rule` | `control_variant` |                 50 |
+| `india_rule` | `blue_variant`    |                 30 |
+| `india_rule` | `green_variant`   |                 20 |
 
-The weights for a fully configured allocation must sum to 100.
+The percentages for a fully configured allocation must sum to 100.
 
 ### Relationship with other tables
 
@@ -820,12 +820,12 @@ UNIQUE (rule_id, variant_id)
 ### When is it used?
 
 1.  The evaluation engine finds a matching targeting rule.
-2.  It loads that rule's variant weights.
+2.  It loads that rule's variant percentages.
 3.  It calculates a deterministic bucket for the user.
-4.  It selects the variant whose weight range contains that bucket.
+4.  It selects the variant whose percentage range contains that bucket.
 5.  It returns the selected variant and payload.
 
-For example, with weights 50, 30, and 20:
+For example, with percentages 50, 30, and 20:
 
 ```text
 Bucket 0–49  → control
@@ -955,7 +955,7 @@ Tables involved:
 - `feature_flags`
 - `flag_variants`
 
-The engine selects a variant using the variants' `default_weight`
+The engine selects a variant using the variants' `rollout_percentage`
 values.
 
 ### Use case 6: Multivariate flag with targeting
@@ -987,7 +987,7 @@ Tables involved:
 - `rule_variants`
 
 The engine finds the first matching rule and uses its variant
-distribution. If no rule matches, it uses the variants' default weights.
+distribution. If no rule matches, it uses the variants' rollout percentages.
 
 ---
 
@@ -1035,7 +1035,7 @@ For a Boolean flag:
 For a multivariate flag:
 
 - If a rule matches, use `rule_variants`.
-- If no rule matches, use each variant's `default_weight`.
+- If no rule matches, use each variant's `rollout_percentage`.
 
 ### Step 5: Return the result
 
@@ -1065,22 +1065,22 @@ Multivariate response:
 
 Some rules are best enforced when creating or updating configurations.
 
-| Validation                                        | Reason                                         |
-| ------------------------------------------------- | ---------------------------------------------- |
-| Project API key ID is unique                      | Allow lookup of a project by key               |
-| Flag key is unique within a project               | Avoid ambiguous flag lookup                    |
-| Variant key is unique within a flag               | Avoid duplicate variant identifiers            |
-| Rollout is between 0 and 100                      | Keep percentages valid                         |
-| Variant weights are non-negative                  | Prevent invalid allocations                    |
-| Allocation weights sum to 100                     | Ensure every bucket maps to a variant          |
-| Rule priority is deterministic                    | Ensure predictable rule selection              |
-| Variant belongs to the same flag                  | Prevent cross-flag references                  |
-| Boolean flags do not use variant allocations      | Keep flag types consistent                     |
-| Default weights sum to 100 for multivariate flags | Ensure unmatched users always map to a variant |
+| Validation                                            | Reason                                         |
+| ----------------------------------------------------- | ---------------------------------------------- |
+| Project API key ID is unique                          | Allow lookup of a project by key               |
+| Flag key is unique within a project                   | Avoid ambiguous flag lookup                    |
+| Variant key is unique within a flag                   | Avoid duplicate variant identifiers            |
+| Rollout is between 0 and 100                          | Keep percentages valid                         |
+| Variant percentages are non-negative                  | Prevent invalid allocations                    |
+| Allocation percentages sum to 100                     | Ensure every bucket maps to a variant          |
+| Rule priority is deterministic                        | Ensure predictable rule selection              |
+| Variant belongs to the same flag                      | Prevent cross-flag references                  |
+| Boolean flags do not use variant allocations          | Keep flag types consistent                     |
+| Default percentages sum to 100 for multivariate flags | Ensure unmatched users always map to a variant |
 
-Validate weight totals in the application when saving an allocation. Use
+Validate percentage totals in the application when saving an allocation. Use
 a database transaction when inserting or updating multiple allocation
-rows, including the `default_weight` values of a flag's variants.
+rows, including the `rollout_percentage` values of a flag's variants.
 
 For referential integrity, consider composite foreign keys or
 transactional application validation to ensure that a rule can only
@@ -1115,14 +1115,14 @@ advanced experimentation behavior.
 
 ## 14. Final table responsibility reference
 
-| Table             | Main responsibility                                                      |
-| ----------------- | ------------------------------------------------------------------------ |
-| `projects`        | Groups feature flags under an application                                |
-| `feature_flags`   | Defines a flag, its type, kill switch, and default Boolean configuration |
-| `flag_variants`   | Defines possible variants and their default weights when no rule matches |
-| `targeting_rules` | Defines audience-specific behavior and evaluation priority               |
-| `rule_conditions` | Stores the individual conditions used to match an audience               |
-| `rule_variants`   | Defines variant weights for a matching targeting rule                    |
+| Table             | Main responsibility                                                          |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `projects`        | Groups feature flags under an application                                    |
+| `feature_flags`   | Defines a flag, its type, kill switch, and default Boolean configuration     |
+| `flag_variants`   | Defines possible variants and their rollout percentages when no rule matches |
+| `targeting_rules` | Defines audience-specific behavior and evaluation priority                   |
+| `rule_conditions` | Stores the individual conditions used to match an audience                   |
+| `rule_variants`   | Defines variant percentages for a matching targeting rule                    |
 
 ## 15. Recommended implementation order
 
@@ -1136,7 +1136,7 @@ Build the system incrementally:
 3.  Add deterministic percentage rollout.
 4.  Add `targeting_rules` and `rule_conditions`.
 5.  Implement rule priority and condition evaluation.
-6.  Add `flag_variants`, including `default_weight`.
+6.  Add `flag_variants`, including `rollout_percentage`.
 7.  Implement multivariate evaluation.
 8.  Add `rule_variants` for targeted experiments.
 9.  Add caching so evaluations do not require several database queries
@@ -1144,7 +1144,7 @@ Build the system incrementally:
 
 The database should remain the source of truth. Later, the service can
 load a complete flag configuration, including rules, conditions,
-variants, and weights, into a cache and evaluate from that cached
+variants, and percentages, into a cache and evaluate from that cached
 configuration.
 
 ---
@@ -1158,7 +1158,7 @@ There are three different concepts in this schema:
 2.  **A rule is an audience.** `targeting_rules` and `rule_conditions`
     define who belongs to that audience.
 3.  **An allocation is a distribution.** `rule_variants` (per rule) and
-    `flag_variants.default_weight` (the default) define how traffic is
+    `flag_variants.rollout_percentage` (the default) define how traffic is
     split among the available choices.
 
 For Boolean flags, the treatment and rollout are stored directly on the
