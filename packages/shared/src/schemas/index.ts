@@ -5,4 +5,5 @@ export * from "./accounts.ts";
 export * from "./projects.ts";
 export * from "./response.ts";
 export * from "./flags.ts";
+export * from "./variants.ts";
 export * from "./evaluate.ts";

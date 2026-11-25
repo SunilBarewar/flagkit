@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { VariantResponse, VariantSet } from "./variants.ts";
+
 export const FlagType = z.enum(["boolean", "multivariate"]);
 export type FlagType = z.infer<typeof FlagType>;
 
@@ -13,14 +15,21 @@ export const FlagKey = z
 const Description = z.string().trim().max(500);
 const RolloutPercentage = z.int().min(0).max(100);
 
-export const CreateFlagBody = z.object({
+export const CreateFlagFields = z.object({
   key: FlagKey,
   description: Description.optional(),
-  type: FlagType,
   enabled: z.boolean().default(false),
-  rolloutPercentage: RolloutPercentage.default(100),
 });
+
+export const CreateFlagBody = z.discriminatedUnion("type", [
+  CreateFlagFields.extend({
+    type: z.literal("boolean"),
+    rolloutPercentage: RolloutPercentage.default(100),
+  }),
+  CreateFlagFields.extend({ type: z.literal("multivariate"), variants: VariantSet }),
+]);
 export type CreateFlagBody = z.infer<typeof CreateFlagBody>;
+export type CreateFlagInput = z.input<typeof CreateFlagBody>;
 
 /** The key and type can't be changed: SDKs depend on both. */
 export const UpdateFlagBody = z
@@ -42,6 +51,8 @@ export const FlagResponse = z.object({
   type: FlagType,
   enabled: z.boolean(),
   rolloutPercentage: z.int(),
+  /** Included for multivariate flags when they are created. */
+  variants: z.array(VariantResponse).optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
