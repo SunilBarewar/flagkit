@@ -54,7 +54,8 @@ export function ApiKeyDialog({ onClose }: { onClose: () => void }) {
             <DialogHeader>
               <DialogTitle>API key</DialogTitle>
               <DialogDescription>
-                The key for <strong>{project.name}</strong>. For safety, it's only shown once, right when it's made. If you lost it, or it's leaked, create a new one.
+                The key for <strong>{project.name}</strong>. For safety, it's only shown once, right
+                when it's made. If you lost it, or it's leaked, create a new one.
               </DialogDescription>
             </DialogHeader>
             <Input
