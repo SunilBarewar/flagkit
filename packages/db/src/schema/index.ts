@@ -3,3 +3,5 @@ export * from "./accounts.ts";
 export * from "./feature-flags.ts";
 export * from "./flag-variants.ts";
 export * from "./projects.ts";
+export * from "./rule-conditions.ts";
+export * from "./targeting-rules.ts";
