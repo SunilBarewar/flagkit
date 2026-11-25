@@ -19,10 +19,10 @@ The goal is to make the data model understandable before implementation.
 The V1 design deliberately keeps the system small:
 
 - A project contains feature flags.
-- There is no separate `flag_configs` or default-allocation table. A flag has one
-  configuration, stored directly on `feature_flags`. The default
-  variant distribution of a multivariate flag is stored on the variants
-  themselves, as `flag_variants.rollout_percentage`.
+- There is no flag-level rollout setting. A flag's rollout lives in its
+  targeting rules. Every flag always has at least one rule: one with no
+  conditions and a 0% rollout is created together with the flag, so a new
+  flag reaches nobody until that rule is edited.
 - The system supports Boolean and multivariate flags.
 - Targeting rules match user properties supplied by the customer's
   application.
@@ -30,17 +30,25 @@ The V1 design deliberately keeps the system small:
   hashing. Individual user assignments do not need to be stored in the
   database for the initial implementation.
 - Conditions inside one rule are combined with AND. Multiple rules
-  provide alternative matching paths (effectively OR).
-- The first enabled matching rule, ordered by priority, wins.
+  provide alternative matching paths (effectively OR). A rule with no
+  conditions matches every user.
+- Rules are tried in priority order. A user passes a rule when the user
+  matches its conditions and falls inside its rollout percentage. The
+  first rule a user passes wins. A user who misses a rule's rollout falls
+  through to the next rule. All rules share one hash bucket per user and
+  flag.
+- The split between variants of a multivariate flag is stored on the
+  variants (`flag_variants.rollout_percentage`) and applies to every user
+  who passes a rule. A rule can optionally force one variant instead.
+- If a user passes no rule, the flag returns the disabled result.
 
-The six tables are:
+The five tables are:
 
 1.  `projects`
 2.  `feature_flags`
 3.  `flag_variants`
 4.  `targeting_rules`
 5.  `rule_conditions`
-6.  `rule_variants`
 
 ## 3. First understand the main concepts
 
@@ -82,29 +90,40 @@ the flag.
 
 ### Targeting rule
 
-A targeting rule describes an audience that should receive a treatment.
-For example:
+A targeting rule describes an audience and how much of it receives the
+feature. For example:
 
 > If country is IN and plan is premium, enable the feature for 30% of
 > matching users.
 
-A rule contains one or more conditions. A Boolean rule has a Boolean
-treatment and rollout percentage. A multivariate rule has a distribution
-of variants.
+A rule has:
 
-### Default treatment
+- Zero or more conditions that describe the audience. A rule with no
+  conditions matches every user.
+- A rollout percentage: the share of matching users who pass the rule.
+- Optionally, a forced variant (multivariate flags only).
+- A priority, which orders the rules, and an enabled switch.
 
-The default treatment is used when no targeting rule matches.
+### The default rule
 
-- For a Boolean flag, it is controlled by `rollout_percentage` on
-  `feature_flags`: that share of the users who reach the default
-  treatment get `true`, and the rest get `false`.
-- For a multivariate flag, it is controlled by the
-  `rollout_percentage` of each row in `flag_variants`.
+Every flag is created with one rule that has no conditions and a rollout
+of 0%. It matches every user, so its rollout percentage is the flag's
+simple rollout: raising it to 100% turns the flag on for everybody.
 
-This distinction is important: the default Boolean settings and the
-default multivariate allocation are two different ways of describing the
-fallback behavior for the two flag types.
+Because it starts at 0%, a new flag reaches nobody until someone edits
+the rule. A flag always keeps at least one rule.
+
+### Passing a rule
+
+A user passes a rule when both are true:
+
+1.  The user matches every condition of the rule.
+2.  The user's bucket (a stable hash of the user ID and the flag key)
+    is below the rule's rollout percentage.
+
+The first rule the user passes decides the result. A user who misses a
+rule's rollout is not stopped there: they fall through to the next rule.
+A user who passes no rule gets the disabled result.
 
 ---
 
@@ -187,7 +206,7 @@ UNIQUE (api_key_id)
 ### What does this table represent?
 
 `feature_flags` is the central table. It stores each flag's identity,
-type, and default configuration.
+type, and global switch.
 
 Examples:
 
@@ -203,21 +222,22 @@ The service needs a persistent definition of every flag. It must know:
 - What key the application uses to evaluate it.
 - Whether it is a Boolean or multivariate flag.
 - Whether it is globally switched on.
-- What treatment to use when no targeting rule matches.
+
+Who receives the flag is decided by the flag's targeting rules, not by
+this table.
 
 ### Suggested columns
 
-| Column               | Type      | Purpose                             |
-| -------------------- | --------- | ----------------------------------- |
-| `id`                 | UUID      | Primary key                         |
-| `project_id`         | UUID      | References `projects.id`            |
-| `key`                | VARCHAR   | Identifier used by the SDK          |
-| `description`        | TEXT      | Optional explanation                |
-| `type`               | ENUM      | `boolean` or `multivariate`         |
-| `enabled`            | BOOLEAN   | Global kill switch: is the flag on? |
-| `rollout_percentage` | INTEGER   | Share of users who get `true`       |
-| `created_at`         | TIMESTAMP | Creation time                       |
-| `updated_at`         | TIMESTAMP | Last update time                    |
+| Column        | Type      | Purpose                             |
+| ------------- | --------- | ----------------------------------- |
+| `id`          | UUID      | Primary key                         |
+| `project_id`  | UUID      | References `projects.id`            |
+| `key`         | VARCHAR   | Identifier used by the SDK          |
+| `description` | TEXT      | Optional explanation                |
+| `type`        | ENUM      | `boolean` or `multivariate`         |
+| `enabled`     | BOOLEAN   | Global kill switch: is the flag on? |
+| `created_at`  | TIMESTAMP | Creation time                       |
+| `updated_at`  | TIMESTAMP | Last update time                    |
 
 Example Boolean flag:
 
@@ -227,63 +247,36 @@ Example Boolean flag:
   "key": "new_checkout",
   "description": "Redesigned checkout flow",
   "type": "boolean",
-  "enabled": true,
-  "rollout_percentage": 100
+  "enabled": true
 }
 ```
 
-### What do the configuration fields mean?
+### What does `enabled` mean?
 
-**`enabled` --- global kill switch**
-
-This is the top-level switch for the flag: is it on?
+`enabled` is the global kill switch: is the flag on?
 
 - `true`: the flag is evaluated normally.
-- `false`: immediately return the disabled result, regardless of rules
-  or rollout.
+- `false`: immediately return the disabled result, regardless of rules.
 
 This is useful when a feature causes problems and needs to be switched
 off quickly.
 
-Note that an enabled flag does not necessarily return `true` for every
-user. It only means the flag is allowed to decide. The rollout
-percentage then decides who gets `true`.
+An enabled flag does not necessarily return `true` for every user. It
+only means the flag is allowed to decide. The flag's rules then decide
+who gets `true`. A new flag's default rule is at 0%, so it reaches
+nobody until a rule is edited.
 
-**`rollout_percentage` --- share of users who get `true`**
-
-This is the percentage of users who receive `true` when the flag is
-enabled and no targeting rule decides for them. With no targeting rules,
-that is every user.
-
-For example:
-
-```text
-enabled = true
-rollout_percentage = 20
-```
-
-The system enables the feature for 20% of users. The same user always
-lands in the same bucket (a stable hash of the user ID and the flag
-key), so raising the percentage only adds users.
-
-Common settings:
-
-- `100`: on for everyone. This is a plain Boolean flag.
-- `1`--`99`: a gradual rollout.
-- `0`: on for nobody by default. Use this with targeting rules, so only
-  the users a rule matches get the feature.
-
-There is deliberately no separate "default value" column. A Boolean flag
-only ever serves `true` or `false`: the flag is off (`false`) when it is
-disabled, and on (`true`) for the users the rollout and rules select.
-"Enabled for everyone except one country" is a rollout of `100` plus a
-rule for that country that serves `false`.
+There is deliberately no flag-level rollout percentage and no "default
+value" column. A Boolean flag only ever serves `true` or `false`: it is
+`false` when disabled or when the user passes no rule, and `true` for
+users who pass a rule. "Enabled for everyone except one country" is a
+rule `country not_equals IN` at 100%.
 
 ### Relationship with other tables
 
 - Many feature flags belong to one project.
 - One feature flag can have many variants in `flag_variants`.
-- One feature flag can have many targeting rules in `targeting_rules`.
+- One feature flag has one or more targeting rules in `targeting_rules`.
 
 Relationships:
 
@@ -291,23 +284,21 @@ Relationships:
 - `feature_flags.id` → `flag_variants.flag_id`
 - `feature_flags.id` → `targeting_rules.flag_id`
 
-Recommended constraints:
+Recommended constraint:
 
 ```sql
 UNIQUE (project_id, key)
-CHECK (rollout_percentage BETWEEN 0 AND 100)
 ```
 
 The flag key only needs to be unique within its project.
 
 ### When is it used?
 
-1.  When creating a flag, insert its definition and default
-    configuration.
+1.  When creating a flag, insert its definition and its default rule
+    (no conditions, 0% rollout) in one transaction.
 2.  When evaluating a flag, find it by project and flag key.
 3.  Check `enabled` before evaluating rules.
-4.  If no rule matches, use the default Boolean settings or default
-    variant allocation, depending on the flag type.
+4.  Evaluate the flag's rules to decide the result.
 
 ---
 
@@ -324,32 +315,30 @@ For example, a homepage experiment might have:
 - `green`
 
 The variants define the possible outcomes. Each variant also stores its
-`rollout_percentage`: the share of users who receive it when no targeting
-rule matches. Percentages for targeted audiences are stored separately in
-`rule_variants`.
+`rollout_percentage`: the share of users who receive it among the users
+who pass a rule.
 
 ### Why do we need it?
 
 A multivariate flag must be able to return one of several alternatives
 rather than just `true` or `false`.
 
-Keeping variants in their own table means the same set of variants can
-be referenced by the allocations attached to different targeting rules.
-The default allocation is stored directly on each variant as
-`rollout_percentage`, because it is a single number per variant with no
-other dimension.
+Who is eligible is decided by the rules. How the eligible users are split
+between the variants is decided here, once for the whole flag. This keeps
+the two questions separate: a rule's rollout says how many users get _a_
+variant, and the variants' percentages say which one.
 
 ### Suggested columns
 
-| Column               | Type      | Purpose                                                      |
-| -------------------- | --------- | ------------------------------------------------------------ |
-| `id`                 | UUID      | Primary key                                                  |
-| `flag_id`            | UUID      | References `feature_flags.id`                                |
-| `key`                | VARCHAR   | Stable variant identifier                                    |
-| `description`        | TEXT      | Optional explanation                                         |
-| `payload`            | JSONB     | Optional data returned with the variant                      |
-| `rollout_percentage` | INTEGER   | Percentage (0-100) when no targeting rule matches, default 0 |
-| `created_at`         | TIMESTAMP | Creation time                                                |
+| Column               | Type      | Purpose                                 |
+| -------------------- | --------- | --------------------------------------- |
+| `id`                 | UUID      | Primary key                             |
+| `flag_id`            | UUID      | References `feature_flags.id`           |
+| `key`                | VARCHAR   | Stable variant identifier               |
+| `description`        | TEXT      | Optional explanation                    |
+| `payload`            | JSONB     | Optional data returned with the variant |
+| `rollout_percentage` | INTEGER   | Percentage (0-100) of users, default 0  |
+| `created_at`         | TIMESTAMP | Creation time                           |
 
 Example variants:
 
@@ -359,23 +348,19 @@ Example variants:
 | `blue`    | Blue theme  | `{"theme":"blue"}`    |                 25 |
 | `green`   | Green theme | `{"theme":"green"}`   |                 25 |
 
-This means users who match no targeting rule receive `control` 50% of
-the time, `blue` 25% and `green` 25%. The default percentages of a flag's
-variants must sum to 100.
+This means users who pass a rule receive `control` 50% of the time,
+`blue` 25% and `green` 25%. The percentages of a flag's variants must
+sum to 100.
 
 ### What is `rollout_percentage` used for?
 
-It replaces a separate default-allocation table. When no targeting rule
-matches, the engine loads the flag's variants and uses deterministic
-hashing to pick one according to their `rollout_percentage` values.
+When a user passes a rule that does not force a variant, the engine
+loads the flag's variants and uses deterministic hashing to pick one
+according to their `rollout_percentage` values.
 
 It is a plain integer column rather than JSON so that the database can
-enforce the 0-100 range, and so that a percentage can never point at a
-variant of another flag. `payload` stays reserved for data returned to
+enforce the 0-100 range. `payload` stays reserved for data returned to
 the application, not allocation settings.
-
-If the system later supports per-environment defaults, this column
-would move into a separate allocation table keyed by environment.
 
 ### What is `payload` used for?
 
@@ -399,13 +384,13 @@ The application decides how to use that data.
 
 - One feature flag can have many variants.
 - A variant belongs to exactly one feature flag.
-- A variant can be referenced by multiple `rule_variants` rows.
-- A variant carries its own default rollout percentage.
+- A variant can be forced by several `targeting_rules` through
+  `targeting_rules.variant_id`.
 
 Relationships:
 
 - `feature_flags.id` → `flag_variants.flag_id`
-- `flag_variants.id` → `rule_variants.variant_id`
+- `flag_variants.id` → `targeting_rules.variant_id`
 
 Recommended constraint:
 
@@ -416,17 +401,16 @@ CHECK (rollout_percentage BETWEEN 0 AND 100)
 
 ### When is it used?
 
-1.  When a user creates a multivariate flag, they define its variants.
-2.  Each variant is given a `rollout_percentage`, which defines the
-    distribution for the default audience.
-3.  They can also be assigned different percentages in `rule_variants` for
-    particular targeting rules.
-4.  During evaluation, the engine selects one variant from the relevant
-    allocation and returns its key and payload.
+1.  When a user creates a multivariate flag, they define its variants
+    together with their percentages.
+2.  During evaluation, once a rule is passed, the engine selects one
+    variant from the weighted percentages (or uses the rule's forced
+    variant) and returns its key and payload.
 
 Important: a new variant starts with `rollout_percentage = 0`, so it
-receives no default traffic until a percentage is set. Targeting rules need
-their own `rule_variants` rows.
+receives no traffic until a percentage is set. The percentages of a
+flag's variants are always saved together so they can be checked to
+sum to 100.
 
 ---
 
@@ -434,7 +418,8 @@ their own `rule_variants` rows.
 
 ### What does this table represent?
 
-`targeting_rules` stores audience-specific behavior for a feature flag.
+`targeting_rules` stores the audiences of a feature flag and how much of
+each audience receives it.
 
 For example:
 
@@ -444,7 +429,8 @@ Or:
 
 > Give users in the US a 50% chance of receiving the new checkout.
 
-A flag can have multiple targeting rules.
+A flag has one or more targeting rules. The first one, with no conditions
+and a 0% rollout, is created together with the flag.
 
 ### Why do we need it?
 
@@ -455,119 +441,128 @@ A product team may want to:
 - Release a feature to a particular country.
 - Enable a feature only for premium customers.
 - Release a feature to internal users first.
-- Roll out a feature gradually to a matching audience.
-- Run different experiment allocations for different audiences.
+- Roll out a feature gradually, to everyone or to a matching audience.
+- Send a specific audience to a specific variant.
 
-Each of these audience-specific configurations can be represented as a
-rule.
+Each of these is a rule. A plain percentage rollout is just a rule with
+no conditions.
 
 ### Suggested columns
 
-| Column               | Type      | Purpose                               |
-| -------------------- | --------- | ------------------------------------- |
-| `id`                 | UUID      | Primary key                           |
-| `flag_id`            | UUID      | References `feature_flags.id`         |
-| `name`               | VARCHAR   | Human-readable rule name              |
-| `priority`           | INTEGER   | Evaluation order                      |
-| `enabled`            | BOOLEAN   | Whether this rule is active           |
-| `serve_enabled`      | BOOLEAN   | Boolean treatment if the rule matches |
-| `rollout_percentage` | INTEGER   | Boolean rollout for matching users    |
-| `created_at`         | TIMESTAMP | Creation time                         |
+| Column               | Type      | Purpose                                     |
+| -------------------- | --------- | ------------------------------------------- |
+| `id`                 | UUID      | Primary key                                 |
+| `flag_id`            | UUID      | References `feature_flags.id`               |
+| `priority`           | INTEGER   | Evaluation order                            |
+| `enabled`            | BOOLEAN   | Whether this rule is active                 |
+| `rollout_percentage` | INTEGER   | Share of matching users who pass, default 0 |
+| `variant_id`         | UUID      | Optional forced variant, `flag_variants.id` |
+| `created_at`         | TIMESTAMP | Creation time                               |
 
 Example:
 
 ```json
 {
   "flag_id": "flag_123",
-  "name": "Indian premium users",
   "priority": 1,
   "enabled": true,
-  "serve_enabled": true,
   "rollout_percentage": 30
 }
 ```
+
+Its conditions are stored in `rule_conditions`.
 
 ### Explanation of important fields
 
 **`priority`**
 
-Multiple rules may match the same user. Priority determines which
-matching rule wins.
+Multiple rules may match the same user. Priority determines the order in
+which they are tried.
 
 For V1:
 
 - Lower number means higher priority.
 - Evaluate rules in ascending priority order.
-- Use the first enabled matching rule.
-- Do not continue to the next rule if the matched rule's rollout
-  excludes the user.
+- The first enabled rule the user passes wins.
+- A user who matches a rule but misses its rollout falls through to the
+  next rule.
 
 For example:
 
 ```text
 Rule A — priority 1:
-country = IN
+country = IN AND plan = premium, rollout 100%
 
 Rule B — priority 2:
-country = IN AND plan = premium
+country = IN, rollout 20%
+
+Rule C — priority 3:
+no conditions, rollout 5%
 ```
 
-A premium user in India matches both. Rule A wins because it has higher
-priority.
+A premium user in India passes Rule A and gets the feature. Another user
+in India misses A's conditions, passes B if they fall in the 20%, and
+otherwise falls through to C.
 
-When creating rules, make sure the priority order reflects the intended
-behavior. A more specific rule should generally be placed before a
-broader rule if it needs to take precedence.
+Because all rules share the same bucket for a user, a later rule with an
+equal or smaller percentage can never add users that an earlier, broader
+rule missed. Only a larger percentage can.
+
+Make sure the priority order reflects the intended behavior. A more
+specific rule should generally be placed before a broader one. Priority
+is unique within a flag.
 
 **`enabled`**
 
-Allows a user to deactivate a rule without deleting it.
-
-**`serve_enabled`**
-
-Defines the Boolean treatment for users matching this rule.
-
-For example:
-
-```text
-serve_enabled = true
-rollout_percentage = 30
-```
-
-Thirty percent of users matching the rule receive `true`; the others
-receive `false`.
+Allows a user to deactivate a rule without deleting it. A disabled rule
+is skipped. A flag always keeps at least one rule, even if all of them
+are disabled, in which case nobody passes.
 
 **`rollout_percentage`**
 
-Controls the rollout within the matching audience, not across all
-project users.
+Controls how many of the users matching the rule pass it. A rule with no
+conditions and 100% passes everybody.
 
-For multivariate flags, the variant distribution in `rule_variants` is
-used instead.
+A new flag's default rule is at 0%, so it passes nobody.
+
+**`variant_id`**
+
+Only used by multivariate flags. When set, every user who passes the rule
+receives that variant, ignoring the flag's variant percentages. When
+empty, the user's variant is chosen from `flag_variants.rollout_percentage`.
+
+The variant must belong to the same flag as the rule. Deleting a variant
+clears `variant_id` on the rules that forced it.
 
 ### Relationship with other tables
 
 - Many targeting rules belong to one feature flag.
 - One targeting rule has many conditions in `rule_conditions`.
-- One targeting rule can have many variant allocations in
-  `rule_variants`.
+- One targeting rule can force one variant in `flag_variants`.
 
 Relationships:
 
 - `feature_flags.id` → `targeting_rules.flag_id`
 - `targeting_rules.id` → `rule_conditions.rule_id`
-- `targeting_rules.id` → `rule_variants.rule_id`
+- `flag_variants.id` → `targeting_rules.variant_id`
+
+Recommended constraints:
+
+```sql
+UNIQUE (flag_id, priority)
+CHECK (rollout_percentage BETWEEN 0 AND 100)
+```
 
 ### When is it used?
 
-1.  The evaluation engine loads the flag's active rules.
+1.  The evaluation engine loads the flag's enabled rules.
 2.  It sorts them by priority.
 3.  It evaluates each rule's conditions against the supplied user
     properties.
-4.  It uses the first matching rule.
-5.  For a Boolean flag, it applies the rule's Boolean treatment and
-    rollout.
-6.  For a multivariate flag, it uses that rule's variant allocation.
+4.  It checks whether the user's bucket is inside the rule's rollout.
+5.  The first rule the user passes decides the result.
+6.  For a multivariate flag, it uses the rule's forced variant, or picks
+    one by the variants' percentages.
 
 ---
 
@@ -578,7 +573,8 @@ Relationships:
 `rule_conditions` stores the individual conditions that make up a
 targeting rule.
 
-A rule can contain one condition or multiple conditions.
+A rule can contain one condition, several conditions, or none. A rule
+with no conditions matches every user.
 
 For example:
 
@@ -744,98 +740,7 @@ The service does not need to query the customer's user database.
 
 ---
 
-## 9. Table 6 --- `rule_variants`
-
-### What does this table represent?
-
-`rule_variants` stores the variant distribution for a
-particular targeting rule.
-
-It is used for multivariate flags.
-
-Imagine a checkout experiment where users in India should receive:
-
-- Control: 50%
-- Variant A: 30%
-- Variant B: 20%
-
-The rule determines which audience is eligible. This table determines
-how that audience is split among variants.
-
-### Why do we need it?
-
-The same variants may have different distributions for different
-audiences.
-
-For example:
-
-| Audience      | Control | Variant A |
-| ------------- | ------: | --------: |
-| India         |     50% |       50% |
-| USA           |     20% |       80% |
-| Everyone else |    100% |        0% |
-
-The variants themselves are defined once in `flag_variants`. Their
-audience-specific percentages belong in `rule_variants`.
-
-This separation avoids duplicating variant definitions for every rule.
-
-### Suggested columns
-
-| Column               | Type    | Purpose                             |
-| -------------------- | ------- | ----------------------------------- |
-| `id`                 | UUID    | Primary key                         |
-| `rule_id`            | UUID    | References `targeting_rules.id`     |
-| `variant_id`         | UUID    | References `flag_variants.id`       |
-| `rollout_percentage` | INTEGER | Percentage (0-100) for this variant |
-
-Example records:
-
-| rule_id      | variant_id        | rollout_percentage |
-| ------------ | ----------------- | -----------------: |
-| `india_rule` | `control_variant` |                 50 |
-| `india_rule` | `blue_variant`    |                 30 |
-| `india_rule` | `green_variant`   |                 20 |
-
-The percentages for a fully configured allocation must sum to 100.
-
-### Relationship with other tables
-
-- One targeting rule can have multiple variant allocation records.
-- Each allocation record references one variant.
-- The referenced variant must belong to the same feature flag as the
-  rule.
-
-Relationships:
-
-- `targeting_rules.id` → `rule_variants.rule_id`
-- `flag_variants.id` → `rule_variants.variant_id`
-
-Recommended constraint:
-
-```sql
-UNIQUE (rule_id, variant_id)
-```
-
-### When is it used?
-
-1.  The evaluation engine finds a matching targeting rule.
-2.  It loads that rule's variant percentages.
-3.  It calculates a deterministic bucket for the user.
-4.  It selects the variant whose percentage range contains that bucket.
-5.  It returns the selected variant and payload.
-
-For example, with percentages 50, 30, and 20:
-
-```text
-Bucket 0–49  → control
-Bucket 50–79 → blue
-Bucket 80–99 → green
-```
-
----
-
-## 10. How the six tables work together
+## 9. How the five tables work together
 
 This section summarizes the table usage in real scenarios.
 
@@ -845,19 +750,20 @@ Requirement:
 
 ```text
 Flag: dark_mode
-Active: true
-Default value: true
-Default rollout: 100%
-No targeting rules.
+Enabled: true
+On for everyone.
 ```
 
 Tables involved:
 
 - `projects`
 - `feature_flags`
+- `targeting_rules` (the default rule)
 
-The evaluation engine finds the flag, checks the global switch, finds no
-matching rule, and uses the default Boolean configuration.
+The flag's default rule has no conditions and its rollout is set to 100%.
+
+The engine finds the flag, checks the global switch, and finds that the
+default rule matches every user and every user is inside 100%.
 
 Result:
 
@@ -873,18 +779,19 @@ Requirement:
 
 ```text
 Flag: new_checkout
-Active: true
-Default value: true
-Default rollout: 20%
+Enabled: true
+On for 20% of users.
 ```
 
 Tables involved:
 
 - `projects`
 - `feature_flags`
+- `targeting_rules` (the default rule, set to 20%)
 
 The engine calculates a stable bucket for the user. Users in the first
-20 buckets receive the feature; the remaining users do not.
+20 buckets pass the rule and receive the feature; the remaining users do
+not.
 
 No user assignment records are required.
 
@@ -899,7 +806,7 @@ country = IN
 AND
 plan = premium
 
-Enable for 100% of matching users.
+Enable for 100% of matching users. Nobody else gets it.
 ```
 
 Tables involved:
@@ -909,21 +816,25 @@ Tables involved:
 - `targeting_rules`
 - `rule_conditions`
 
-The engine evaluates the conditions against the supplied user
-properties. If they match, it applies the rule's Boolean treatment and
-rollout.
+The flag has one rule with two conditions and a 100% rollout. Users who
+match both conditions pass it. Everyone else passes no rule and receives
+`false`.
 
-### Use case 4: Boolean flag with targeted rollout
+### Use case 4: Boolean flag with a targeted rollout and everyone else
 
 Requirement:
 
 ```text
 Flag: new_checkout
 
-Rule:
+Rule 1 (priority 1):
   country = IN
   plan = premium
   rollout = 30%
+
+Rule 2 (priority 2):
+  no conditions
+  rollout = 5%
 ```
 
 Tables involved:
@@ -933,9 +844,15 @@ Tables involved:
 - `targeting_rules`
 - `rule_conditions`
 
-Only matching users enter the 30% rollout.
+Premium users in India enter the 30% rollout. A user who misses it, or
+who does not match, falls through to Rule 2, which has no conditions and
+covers everybody at 5%.
 
-Users who do not match receive the default Boolean treatment.
+"Enabled for everyone except one country" is a single rule:
+
+```text
+country not_equals IN, rollout 100%
+```
 
 ### Use case 5: Multivariate flag without targeting
 
@@ -947,6 +864,7 @@ Flag: homepage_experiment
 control = 50%
 blue = 25%
 green = 25%
+Shown to every user.
 ```
 
 Tables involved:
@@ -954,9 +872,10 @@ Tables involved:
 - `projects`
 - `feature_flags`
 - `flag_variants`
+- `targeting_rules` (the default rule, set to 100%)
 
-The engine selects a variant using the variants' `rollout_percentage`
-values.
+Every user passes the default rule. The engine then selects a variant
+using the variants' `rollout_percentage` values.
 
 ### Use case 6: Multivariate flag with targeting
 
@@ -965,16 +884,16 @@ Requirement:
 ```text
 Flag: checkout_experiment
 
-India:
-  control = 50%
-  variant_a = 50%
+variants: control 50%, variant_a 50%
 
-USA:
-  control = 20%
-  variant_a = 80%
+Rule 1 (priority 1):
+  plan = internal
+  rollout = 100%
+  forced variant = variant_a
 
-Everyone else:
-  control = 100%
+Rule 2 (priority 2):
+  no conditions
+  rollout = 20%
 ```
 
 Tables involved:
@@ -984,14 +903,14 @@ Tables involved:
 - `flag_variants`
 - `targeting_rules`
 - `rule_conditions`
-- `rule_variants`
 
-The engine finds the first matching rule and uses its variant
-distribution. If no rule matches, it uses the variants' rollout percentages.
+Internal users always receive `variant_a`. Of everyone else, 20% pass
+Rule 2 and are split 50/50 between `control` and `variant_a`. The
+remaining users pass no rule and receive the disabled result.
 
 ---
 
-## 11. Important evaluation behavior
+## 10. Important evaluation behavior
 
 The following rules should be consistent throughout the implementation.
 
@@ -1009,35 +928,46 @@ If the flag does not exist, return the agreed fallback result.
 
 If `feature_flags.enabled` is false, return disabled immediately.
 
-This takes precedence over all targeting rules and allocations.
+This takes precedence over all targeting rules.
 
-### Step 3: Find the first matching targeting rule
+### Step 3: Compute the user's bucket
+
+```text
+bucket = hash(userId + flagKey) % 100
+```
+
+The same bucket is used for every rule of the flag.
+
+### Step 4: Find the first rule the user passes
 
 Load enabled rules ordered by ascending priority.
 
 For each rule:
 
 - Read its conditions.
-- Evaluate all conditions against the user context.
-- All conditions must pass.
+- Evaluate all conditions against the user context. All conditions must
+  pass. A rule with no conditions matches every user.
+- Check that the user's bucket is below the rule's `rollout_percentage`.
 
-Use the first matching rule.
+The first rule that passes both checks wins. A user who matches a rule
+but misses its rollout continues to the next rule.
 
-### Step 4: Evaluate according to flag type
+If the user passes no rule, return the disabled result.
+
+### Step 5: Evaluate according to flag type
 
 For a Boolean flag:
 
-- If a rule matches, use `serve_enabled` and that rule's
-  `rollout_percentage`.
-- If no rule matches, use the flag's `rollout_percentage`: that share
-  of users gets `true`, the rest get `false`.
+- Return `true`.
 
 For a multivariate flag:
 
-- If a rule matches, use `rule_variants`.
-- If no rule matches, use each variant's `rollout_percentage`.
+- If the winning rule has a `variant_id`, return that variant.
+- Otherwise pick a variant by the variants' `rollout_percentage`, using
+  a second hash that is independent of the rollout bucket, so that
+  variant choice does not depend on who was eligible.
 
-### Step 5: Return the result
+### Step 6: Return the result
 
 Boolean response:
 
@@ -1061,32 +991,31 @@ Multivariate response:
 
 ---
 
-## 12. Important implementation constraints
+## 11. Important implementation constraints
 
 Some rules are best enforced when creating or updating configurations.
 
-| Validation                                            | Reason                                         |
-| ----------------------------------------------------- | ---------------------------------------------- |
-| Project API key ID is unique                          | Allow lookup of a project by key               |
-| Flag key is unique within a project                   | Avoid ambiguous flag lookup                    |
-| Variant key is unique within a flag                   | Avoid duplicate variant identifiers            |
-| Rollout is between 0 and 100                          | Keep percentages valid                         |
-| Variant percentages are non-negative                  | Prevent invalid allocations                    |
-| Allocation percentages sum to 100                     | Ensure every bucket maps to a variant          |
-| Rule priority is deterministic                        | Ensure predictable rule selection              |
-| Variant belongs to the same flag                      | Prevent cross-flag references                  |
-| Boolean flags do not use variant allocations          | Keep flag types consistent                     |
-| Default percentages sum to 100 for multivariate flags | Ensure unmatched users always map to a variant |
+| Validation                                        | Reason                                          |
+| ------------------------------------------------- | ----------------------------------------------- |
+| Project API key ID is unique                      | Allow lookup of a project by key                |
+| Flag key is unique within a project               | Avoid ambiguous flag lookup                     |
+| Variant key is unique within a flag               | Avoid duplicate variant identifiers             |
+| Rollout percentages are between 0 and 100         | Keep percentages valid                          |
+| Variant percentages sum to 100                    | Ensure every user passing a rule gets a variant |
+| A flag has at least one rule                      | Every flag has a rollout to edit                |
+| Rule priority is unique within a flag             | Ensure predictable rule selection               |
+| Forced variant belongs to the same flag           | Prevent cross-flag references                   |
+| Boolean flags have no variants or forced variants | Keep flag types consistent                      |
 
-Validate percentage totals in the application when saving an allocation. Use
-a database transaction when inserting or updating multiple allocation
-rows, including the `rollout_percentage` values of a flag's variants.
+Validate in the application when saving. Save a flag's variants together,
+and create a flag together with its default rule, in a database
+transaction.
 
 For referential integrity, consider composite foreign keys or
 transactional application validation to ensure that a rule can only
 reference variants belonging to its own flag.
 
-## 13. Why we do not store individual user assignments
+## 12. Why we do not store individual user assignments
 
 For the initial implementation, we do not need a table containing every
 user's assigned flag value or variant.
@@ -1113,33 +1042,32 @@ A future version could introduce persisted assignments if we need to
 preserve experiment membership across allocation changes or support more
 advanced experimentation behavior.
 
-## 14. Final table responsibility reference
+## 13. Final table responsibility reference
 
-| Table             | Main responsibility                                                          |
-| ----------------- | ---------------------------------------------------------------------------- |
-| `projects`        | Groups feature flags under an application                                    |
-| `feature_flags`   | Defines a flag, its type, kill switch, and default Boolean configuration     |
-| `flag_variants`   | Defines possible variants and their rollout percentages when no rule matches |
-| `targeting_rules` | Defines audience-specific behavior and evaluation priority                   |
-| `rule_conditions` | Stores the individual conditions used to match an audience                   |
-| `rule_variants`   | Defines variant percentages for a matching targeting rule                    |
+| Table             | Main responsibility                                                 |
+| ----------------- | ------------------------------------------------------------------- |
+| `projects`        | Groups feature flags under an application                           |
+| `feature_flags`   | Defines a flag, its type and its kill switch                        |
+| `flag_variants`   | Defines possible variants and how users who pass a rule are split   |
+| `targeting_rules` | Defines audiences, their rollout percentage and evaluation priority |
+| `rule_conditions` | Stores the individual conditions used to match an audience          |
 
-## 15. Recommended implementation order
+## 14. Recommended implementation order
 
-Do not implement all six tables and all evaluation behavior at once.
+Do not implement all five tables and all evaluation behavior at once.
 
 Build the system incrementally:
 
 1.  Create `projects` and `feature_flags`.
-2.  Implement flag creation, updates, deletion, and simple Boolean
-    evaluation.
-3.  Add deterministic percentage rollout.
-4.  Add `targeting_rules` and `rule_conditions`.
-5.  Implement rule priority and condition evaluation.
+2.  Implement flag creation, updates, deletion, and the kill switch.
+3.  Add `targeting_rules` and create a default rule (no conditions, 0%)
+    together with every flag.
+4.  Implement deterministic percentage rollout, rule priority and
+    fall-through using the default rule.
+5.  Add `rule_conditions` and implement condition evaluation.
 6.  Add `flag_variants`, including `rollout_percentage`.
-7.  Implement multivariate evaluation.
-8.  Add `rule_variants` for targeted experiments.
-9.  Add caching so evaluations do not require several database queries
+7.  Implement multivariate evaluation and forced variants.
+8.  Add caching so evaluations do not require several database queries
     every time.
 
 The database should remain the source of truth. Later, the service can
@@ -1149,20 +1077,21 @@ configuration.
 
 ---
 
-## 16. The most important distinction to remember
+## 15. The most important distinction to remember
 
 There are three different concepts in this schema:
 
 1.  **A variant is an option.** `flag_variants` defines what choices
     exist.
-2.  **A rule is an audience.** `targeting_rules` and `rule_conditions`
-    define who belongs to that audience.
-3.  **An allocation is a distribution.** `rule_variants` (per rule) and
-    `flag_variants.rollout_percentage` (the default) define how traffic is
-    split among the available choices.
+2.  **A rule is an audience and how much of it gets the flag.**
+    `targeting_rules` and `rule_conditions` define who belongs to the
+    audience and what share of it passes.
+3.  **A split is a distribution.** `flag_variants.rollout_percentage`
+    defines how the users who pass a rule are divided among the
+    available choices, unless the rule forces one variant.
 
-For Boolean flags, the treatment and rollout are stored directly on the
-flag or targeting rule.
+For Boolean flags, passing a rule means getting `true`, and the rule's
+rollout percentage is the only dial.
 
-Once these three concepts are clear, the purpose of all six tables
+Once these three concepts are clear, the purpose of all five tables
 becomes much easier to understand.
