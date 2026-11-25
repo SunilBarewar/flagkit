@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateFlag,
   getBucket,
+  getVariantBucket,
   matchesCondition,
+  pickVariant,
   type EvaluableCondition,
   type EvaluableRule,
+  type EvaluableVariant,
 } from "@/modules/evaluate/evaluate.ts";
 
 const context = (userId: string, properties: Record<string, string | number | boolean> = {}) => ({
@@ -53,7 +56,7 @@ const rule = (patch: Partial<EvaluableRule> = {}): EvaluableRule => ({
 });
 
 describe("evaluateFlag", () => {
-  const flag = { key: "checkout", enabled: true };
+  const flag = { key: "checkout", enabled: true, type: "boolean" as const };
 
   it("is off for everyone when the flag is disabled, even at 100%", () => {
     expect(evaluateFlag({ ...flag, enabled: false }, [rule()], context("user_1"))).toEqual({
@@ -209,5 +212,182 @@ describe("matchesCondition", () => {
     expect(check("greater_than", 18, "19")).toBe(false);
     expect(check("less_than", 60, "59")).toBe(false);
     expect(check("contains", "a", 5)).toBe(false);
+  });
+});
+
+describe("getVariantBucket", () => {
+  // Pinned values: an SDK in another language must compute the same buckets.
+  it("matches the known vectors", () => {
+    expect(getVariantBucket("user_1", "checkout")).toBe(69);
+    expect(getVariantBucket("user_2", "checkout")).toBe(95);
+    expect(getVariantBucket("user_1", "other_flag")).toBe(49);
+  });
+
+  it("is independent of the rollout bucket", () => {
+    // Among users the 20% rollout lets in (rollout bucket 0-19), variant buckets still spread out.
+    const variantBuckets = new Set<number>();
+    for (let i = 0; i < 5000; i++) {
+      if (getBucket(`user_${i}`, "checkout") < 20) {
+        variantBuckets.add(Math.floor(getVariantBucket(`user_${i}`, "checkout") / 10));
+      }
+    }
+    expect(variantBuckets.size).toBe(10);
+  });
+});
+
+describe("pickVariant", () => {
+  const variant = (key: string, rolloutPercentage: number): EvaluableVariant => ({
+    key,
+    rolloutPercentage,
+    payload: null,
+  });
+  const variants = [variant("control", 50), variant("blue", 25), variant("green", 25)];
+
+  it("maps buckets to the slices of the percentages", () => {
+    expect(pickVariant(variants, 0)?.key).toBe("control");
+    expect(pickVariant(variants, 49)?.key).toBe("control");
+    expect(pickVariant(variants, 50)?.key).toBe("blue");
+    expect(pickVariant(variants, 74)?.key).toBe("blue");
+    expect(pickVariant(variants, 75)?.key).toBe("green");
+    expect(pickVariant(variants, 99)?.key).toBe("green");
+  });
+
+  it("skips variants at 0%", () => {
+    expect(pickVariant([variant("a", 0), variant("b", 100)], 0)?.key).toBe("b");
+  });
+
+  it("returns nothing for buckets past percentages that add up to less than 100", () => {
+    expect(pickVariant([variant("a", 40)], 39)?.key).toBe("a");
+    expect(pickVariant([variant("a", 40)], 40)).toBeUndefined();
+  });
+});
+
+describe("evaluateFlag for a multivariate flag", () => {
+  const flag = { key: "checkout", enabled: true, type: "multivariate" as const };
+  const variants: EvaluableVariant[] = [
+    { key: "control", rolloutPercentage: 50, payload: null },
+    { key: "blue", rolloutPercentage: 50, payload: { theme: "blue" } },
+  ];
+  const everyone = (patch: Partial<EvaluableRule> = {}): EvaluableRule => ({
+    enabled: true,
+    rolloutPercentage: 100,
+    conditions: [],
+    ...patch,
+  });
+  const off = { key: "checkout", enabled: false, variant: null, payload: null };
+
+  it("returns no variant when the flag is disabled", () => {
+    expect(evaluateFlag({ ...flag, enabled: false }, [everyone()], context("u"), variants)).toEqual(
+      off,
+    );
+  });
+
+  it("returns no variant to a user who passes no rule", () => {
+    expect(
+      evaluateFlag(flag, [everyone({ rolloutPercentage: 0 })], context("u"), variants),
+    ).toEqual(off);
+    expect(evaluateFlag(flag, [], context("u"), variants)).toEqual(off);
+  });
+
+  it("serves a rule's forced variant with its payload", () => {
+    const rules = [everyone({ variantKey: "blue" })];
+
+    for (let i = 0; i < 100; i++) {
+      expect(evaluateFlag(flag, rules, context(`user_${i}`), variants)).toEqual({
+        key: "checkout",
+        enabled: true,
+        variant: "blue",
+        payload: { theme: "blue" },
+      });
+    }
+  });
+
+  it("splits users who pass a rule by the variants' percentages", () => {
+    const counts: Record<string, number> = { control: 0, blue: 0 };
+    for (let i = 0; i < 10_000; i++) {
+      const result = evaluateFlag(flag, [everyone()], context(`user_${i}`), variants);
+      counts[result.variant!]!++;
+    }
+
+    expect(counts.control).toBeGreaterThan(4500);
+    expect(counts.control).toBeLessThan(5500);
+  });
+
+  it("keeps the same variant for the same user", () => {
+    for (let i = 0; i < 200; i++) {
+      const first = evaluateFlag(flag, [everyone()], context(`user_${i}`), variants);
+      const again = evaluateFlag(flag, [everyone()], context(`user_${i}`), variants);
+      expect(again).toEqual(first);
+    }
+  });
+
+  it("still splits evenly among the users a partial rollout lets in", () => {
+    const counts: Record<string, number> = { control: 0, blue: 0 };
+    for (let i = 0; i < 20_000; i++) {
+      const result = evaluateFlag(
+        flag,
+        [everyone({ rolloutPercentage: 20 })],
+        context(`user_${i}`),
+        variants,
+      );
+      if (result.variant) counts[result.variant]!++;
+    }
+
+    const total = counts.control! + counts.blue!;
+    expect(total).toBeGreaterThan(3600);
+    expect(total).toBeLessThan(4400);
+    expect(counts.control! / total).toBeGreaterThan(0.45);
+    expect(counts.control! / total).toBeLessThan(0.55);
+  });
+
+  it("uses the variant of the first rule the user passes", () => {
+    const internal: EvaluableCondition = {
+      attribute: "plan",
+      operator: "equals",
+      value: "internal",
+    };
+    const rules = [
+      everyone({ conditions: [internal], variantKey: "blue" }),
+      everyone({ variantKey: "control" }),
+    ];
+
+    expect(evaluateFlag(flag, rules, context("u", { plan: "internal" }), variants).variant).toBe(
+      "blue",
+    );
+    expect(evaluateFlag(flag, rules, context("u", { plan: "free" }), variants).variant).toBe(
+      "control",
+    );
+  });
+
+  it("falls through to a later rule's variant when the user misses a rollout", () => {
+    // user_1 is in bucket 32: outside the first rule's 10%, inside the second's 100%.
+    const rules = [
+      everyone({ rolloutPercentage: 10, variantKey: "blue" }),
+      everyone({ variantKey: "control" }),
+    ];
+
+    expect(evaluateFlag(flag, rules, context("user_1"), variants).variant).toBe("control");
+  });
+
+  it("returns no variant when percentages leave the user's bucket uncovered", () => {
+    // user_2's variant bucket is 95, past a single variant at 50%.
+    const partial: EvaluableVariant[] = [{ key: "only", rolloutPercentage: 50, payload: null }];
+
+    expect(evaluateFlag(flag, [everyone()], context("user_2"), partial)).toEqual(off);
+  });
+
+  it("returns no variant when a rule forces a variant that is gone", () => {
+    expect(
+      evaluateFlag(flag, [everyone({ variantKey: "deleted" })], context("u"), variants),
+    ).toEqual(off);
+  });
+
+  it("leaves boolean flags without variant fields", () => {
+    const boolean = { key: "checkout", enabled: true, type: "boolean" as const };
+
+    expect(evaluateFlag(boolean, [everyone()], context("u"))).toEqual({
+      key: "checkout",
+      enabled: true,
+    });
   });
 });
