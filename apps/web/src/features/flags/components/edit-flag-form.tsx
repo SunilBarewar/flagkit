@@ -1,12 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CreateFlagFields, ReplaceVariantsBody } from "@flagkit/shared/schemas";
 import type { FlagResponse } from "@flagkit/shared/schemas";
-import { ChevronRight, Info, Loader2 } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -14,9 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCurrentProject } from "@/features/projects/project-context";
 import { paths } from "@/routes/paths";
 import { useSaveFlag } from "../hooks";
+import { newRule, toRuleDrafts, toRuleInputs } from "../rules";
 import { toVariantDrafts, toVariantInputs } from "../variants";
 import { Card } from "./card";
-import { RolloutCard } from "./rollout-card";
+import { ReleaseConditions } from "./release-conditions";
 import { VariantsEditor } from "./variants-editor";
 
 const FormSchema = CreateFlagFields.pick({ description: true });
@@ -32,12 +34,10 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
   const navigate = useNavigate();
   const save = useSaveFlag(project.id);
   const [enabled, setEnabled] = useState(flag.enabled);
-  // The rollout card edits one rule that matches everyone. Flags with other rules keep them.
-  const rules = flag.rules ?? [];
-  const defaultRule = rules.length === 1 ? rules[0] : undefined;
-  const hasDefaultRuleOnly =
-    !!defaultRule && defaultRule.conditions.length === 0 && !defaultRule.variantKey;
-  const [rollout, setRollout] = useState(defaultRule?.rolloutPercentage ?? 0);
+  const [rules, setRules] = useState(() =>
+    flag.rules?.length ? toRuleDrafts(flag.rules) : [newRule()],
+  );
+  const [rulesError, setRulesError] = useState<string>();
   const [variants, setVariants] = useState(() => toVariantDrafts(flag.variants ?? []));
   const [variantsError, setVariantsError] = useState<string>();
   const multivariate = flag.type === "multivariate";
@@ -58,30 +58,30 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
     };
 
     let variantInputs;
+    let nextVariantsError: string | undefined;
     if (multivariate) {
       const inputs = toVariantInputs(variants);
       if ("error" in inputs) {
-        setVariantsError(inputs.error);
-        return;
+        nextVariantsError = inputs.error;
+      } else {
+        const parsed = ReplaceVariantsBody.safeParse({ variants: inputs.variants });
+        if (parsed.success) variantInputs = inputs.variants;
+        else nextVariantsError = parsed.error.issues[0]?.message;
       }
-      const parsed = ReplaceVariantsBody.safeParse({ variants: inputs.variants });
-      if (!parsed.success) {
-        setVariantsError(parsed.error.issues[0]?.message);
-        return;
-      }
-      variantInputs = inputs.variants;
     }
-    setVariantsError(undefined);
+
+    const ruleInputs = toRuleInputs(rules, {
+      multivariate,
+      variantKeys: variantInputs?.map((variant) => variant.key) ?? [],
+    });
+    const nextRulesError = "error" in ruleInputs ? ruleInputs.error : undefined;
+
+    setVariantsError(nextVariantsError);
+    setRulesError(nextRulesError);
+    if (nextVariantsError || "error" in ruleInputs) return;
 
     save.mutate(
-      {
-        flagId: flag.id,
-        body,
-        variants: variantInputs,
-        rules: hasDefaultRuleOnly
-          ? [{ enabled: defaultRule.enabled, rolloutPercentage: rollout, conditions: [] }]
-          : undefined,
-      },
+      { flagId: flag.id, body, variants: variantInputs, rules: ruleInputs.rules },
       { onSuccess: () => navigate(paths.dashboard) },
     );
   });
@@ -158,12 +158,12 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
             </div>
 
             <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-              <Label htmlFor="enabled" className="text-sm">
-                Enabled
-                <Info className="size-4 text-muted-foreground">
-                  <title>Turn the flag on for the users it's rolled out to</title>
-                </Info>
-              </Label>
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="enabled" className="text-sm">
+                  Enabled
+                </Label>
+                <InfoTip>Turn the flag on for the users it's rolled out to</InfoTip>
+              </div>
               <Switch id="enabled" checked={enabled} onCheckedChange={setEnabled} />
             </div>
           </div>
@@ -181,16 +181,12 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
             </Card>
           )}
 
-          {hasDefaultRuleOnly ? (
-            <RolloutCard rollout={rollout} onRolloutChange={setRollout} enabled={enabled} />
-          ) : (
-            <Card title="Release conditions">
-              <p className="text-muted-foreground">
-                This flag has {rules.length} targeting rules. Editing them here is coming soon, and
-                saving keeps them as they are.
-              </p>
-            </Card>
-          )}
+          <ReleaseConditions
+            rules={rules}
+            onChange={setRules}
+            variantKeys={multivariate ? variants.map((v) => v.key.trim()).filter(Boolean) : []}
+            error={rulesError}
+          />
         </div>
       </form>
     </>

@@ -1,12 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CreateFlagBody, CreateFlagFields } from "@flagkit/shared/schemas";
 import type { CreateFlagInput, FlagType } from "@flagkit/shared/schemas";
-import { ChevronRight, Info, Loader2 } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { isApiError } from "@/api";
 import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -14,13 +15,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCurrentProject } from "@/features/projects/project-context";
 import { paths } from "@/routes/paths";
 import { useCreateFlag } from "../hooks";
+import { newRule, toRuleInputs } from "../rules";
 import { initialVariants, toVariantInputs } from "../variants";
 import { Card } from "./card";
 import { FlagTypePicker } from "./flag-type-picker";
-import { RolloutCard } from "./rollout-card";
+import { ReleaseConditions } from "./release-conditions";
 import { VariantsEditor } from "./variants-editor";
 
-// Only the fields typed into the form. The switch and rollout are plain state below.
+// Only the fields typed into the form. The switch, variants and rules are plain state below.
 const FormSchema = CreateFlagFields.pick({ key: true, description: true });
 
 interface FormValues {
@@ -35,7 +37,8 @@ export function CreateFlagForm() {
   const navigate = useNavigate();
   const create = useCreateFlag(project.id);
   const [enabled, setEnabled] = useState(true);
-  const [rollout, setRollout] = useState(0);
+  const [rules, setRules] = useState(() => [newRule()]);
+  const [rulesError, setRulesError] = useState<string>();
   const [type, setType] = useState<FlagType>("boolean");
   const [variants, setVariants] = useState(initialVariants);
   const [variantsError, setVariantsError] = useState<string>();
@@ -51,31 +54,38 @@ export function CreateFlagForm() {
   const key = useWatch({ control, name: "key" });
 
   const onSubmit = handleSubmit((values) => {
+    const multivariate = type === "multivariate";
+    const variantInputs = multivariate ? toVariantInputs(variants) : undefined;
+    const variantKeys =
+      variantInputs && "variants" in variantInputs ? variantInputs.variants.map((v) => v.key) : [];
+    const ruleInputs = toRuleInputs(rules, { multivariate, variantKeys });
+
+    const nextVariantsError =
+      variantInputs && "error" in variantInputs ? variantInputs.error : undefined;
+    const nextRulesError = "error" in ruleInputs ? ruleInputs.error : undefined;
+    setVariantsError(nextVariantsError);
+    setRulesError(nextRulesError);
+    if (nextVariantsError || nextRulesError) return;
+    if ("error" in ruleInputs) return;
+
     const common = {
       key: values.key,
       description: values.description || undefined,
       enabled,
-      // One rule matching everyone: the flag's rollout. Release conditions replace this soon.
-      rules: [{ rolloutPercentage: rollout, conditions: [] }],
+      rules: ruleInputs.rules,
     };
     let body: CreateFlagInput;
 
-    if (type === "multivariate") {
-      const inputs = toVariantInputs(variants);
-      if ("error" in inputs) {
-        setVariantsError(inputs.error);
-        return;
-      }
-      body = { ...common, type, variants: inputs.variants };
+    if (multivariate && variantInputs && "variants" in variantInputs) {
+      body = { ...common, type: "multivariate", variants: variantInputs.variants };
       const parsed = CreateFlagBody.safeParse(body);
       if (!parsed.success) {
         setVariantsError(parsed.error.issues[0]?.message);
         return;
       }
     } else {
-      body = { ...common, type };
+      body = { ...common, type: "boolean" };
     }
-    setVariantsError(undefined);
 
     create.mutate(body, {
       onSuccess: () => navigate(paths.dashboard),
@@ -169,12 +179,12 @@ export function CreateFlagForm() {
             </div>
 
             <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-              <Label htmlFor="enabled" className="text-sm">
-                Enabled
-                <Info className="size-4 text-muted-foreground">
-                  <title>Turn the flag on for the users it's rolled out to</title>
-                </Info>
-              </Label>
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="enabled" className="text-sm">
+                  Enabled
+                </Label>
+                <InfoTip>Turn the flag on for the users it's rolled out to</InfoTip>
+              </div>
               <Switch id="enabled" checked={enabled} onCheckedChange={setEnabled} />
             </div>
           </div>
@@ -196,7 +206,14 @@ export function CreateFlagForm() {
             </Card>
           )}
 
-          <RolloutCard rollout={rollout} onRolloutChange={setRollout} enabled={enabled} />
+          <ReleaseConditions
+            rules={rules}
+            onChange={setRules}
+            variantKeys={
+              type === "multivariate" ? variants.map((v) => v.key.trim()).filter(Boolean) : []
+            }
+            error={rulesError}
+          />
         </div>
       </form>
     </>

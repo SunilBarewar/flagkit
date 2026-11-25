@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { InfoTip } from "@/components/ui/info-tip";
 
 interface CardProps {
   title: string;
@@ -11,11 +11,7 @@ export function Card({ title, hint, children }: CardProps) {
     <section className="rounded-lg border bg-card p-5">
       <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
         {title}
-        {hint && (
-          <Info className="size-4 text-muted-foreground" aria-label={hint}>
-            <title>{hint}</title>
-          </Info>
-        )}
+        {hint && <InfoTip>{hint}</InfoTip>}
       </h2>
       {children}
     </section>
