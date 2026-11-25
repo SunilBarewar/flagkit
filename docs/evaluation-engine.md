@@ -215,6 +215,52 @@ whose bucket is 0 to 19. If the variant were chosen from that same bucket, all
 those users would land in the first slice and they would **all** get `control`.
 A separate bucket spreads the 20% fairly across the variants.
 
+### A dry run
+
+Flag `checkout`, variants `control 50`, `blue 25`, `green 25`, and one rule with
+no conditions and a 90% rollout. We evaluate `user_1`.
+
+**1. Rollout bucket** (does the user pass the rule?)
+
+```text
+input:        "checkout:user_1"
+sha256:       a688f474350ea53c...
+first 4 bytes: a688f474          → as a number: 2,793,993,332
+2,793,993,332 % 100 = 32
+```
+
+The rule's rollout is 90%, and 32 is below 90, so `user_1` passes the rule.
+
+**2. Variant bucket** (which variant?)
+
+```text
+input:        "variant:checkout:user_1"
+sha256:       0d8110dd1c8df7af...
+first 4 bytes: 0d8110dd          → as a number: 226,562,269
+226,562,269 % 100 = 69
+```
+
+The two inputs differ, so the two buckets are unrelated (32 and 69).
+
+**3. Walk the variants**, adding up the percentages as we go:
+
+```text
+control  50   running total 50    is 69 below 50?   no, keep going
+blue     25   running total 75    is 69 below 75?   yes, stop: blue
+```
+
+The answer is `blue`. The response is
+`{ "enabled": true, "variant": "blue", "payload": ... }`.
+
+The same steps for `user_2` give a rollout bucket of 86 (passes the 90% rule)
+and a variant bucket of 95:
+
+```text
+control  50   running total 50    is 95 below 50?   no
+blue     25   running total 75    is 95 below 75?   no
+green    25   running total 100   is 95 below 100?  yes: green
+```
+
 Two things to remember:
 
 - A rule's rollout says **how many** users get a variant. The variants'
