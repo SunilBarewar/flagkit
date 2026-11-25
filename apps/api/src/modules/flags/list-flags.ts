@@ -37,7 +37,11 @@ export const listFlagsRoute: FastifyPluginAsyncZod = async (app) => {
         countFeatureFlagsByProjectId(projectId),
       ]);
 
-      return paginatedResponse("Flags fetched", flags.map(toFlagResponse), { page, limit, total });
+      return paginatedResponse(
+        "Flags fetched",
+        flags.map((flag) => toFlagResponse(flag)),
+        { page, limit, total },
+      );
     },
   );
 };

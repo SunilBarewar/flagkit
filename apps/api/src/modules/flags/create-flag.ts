@@ -1,5 +1,5 @@
-import { insertFeatureFlag } from "@flagkit/db";
-import { ErrorCode, HttpStatus, ValidationError } from "@flagkit/shared";
+import { insertFeatureFlag, insertMultivariateFeatureFlag } from "@flagkit/db";
+import { HttpStatus } from "@flagkit/shared";
 import {
   ApiErrorResponse,
   CreateFlagBody,
@@ -21,7 +21,7 @@ export const createFlagRoute: FastifyPluginAsyncZod = async (app) => {
         tags: ["flags"],
         summary: "Create a feature flag",
         description:
-          "New flags start disabled unless you enable them. The key must be unique within the project.",
+          "New flags start disabled unless you enable them. The key must be unique within the project. A multivariate flag is created with its variants, which need at least 2 entries and rollout percentages adding up to 100.",
         security,
         params: ProjectIdParams,
         body: CreateFlagBody,
@@ -34,20 +34,18 @@ export const createFlagRoute: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      const { type, ...rest } = request.body;
-
-      if (type === "multivariate") {
-        throw new ValidationError("Multivariate flags are not supported yet", {
-          code: ErrorCode.VALIDATION_FAILED,
-        });
-      }
+      const { projectId } = request.params;
+      const body = request.body;
 
       // A taken key throws a Postgres unique violation, which the error handler maps to a 409.
-      const flag = await insertFeatureFlag({ ...rest, type, projectId: request.params.projectId });
+      const { flag, variants } =
+        body.type === "multivariate"
+          ? await insertMultivariateFeatureFlag({ ...body, projectId }, body.variants)
+          : { flag: await insertFeatureFlag({ ...body, projectId }), variants: undefined };
 
       return reply
         .code(HttpStatus.CREATED)
-        .send(successResponse("Flag created", toFlagResponse(flag)));
+        .send(successResponse("Flag created", toFlagResponse(flag, variants)));
     },
   );
 };

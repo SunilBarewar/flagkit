@@ -1,7 +1,9 @@
-import type { FeatureFlag } from "@flagkit/db";
+import type { FeatureFlag, FlagVariant } from "@flagkit/db";
 import type { FlagResponse } from "@flagkit/shared/schemas";
 
-export function toFlagResponse(flag: FeatureFlag): FlagResponse {
+import { toVariantResponse } from "../variants/mappers.ts";
+
+export function toFlagResponse(flag: FeatureFlag, variants?: FlagVariant[]): FlagResponse {
   return {
     id: flag.id,
     projectId: flag.projectId,
@@ -10,6 +12,7 @@ export function toFlagResponse(flag: FeatureFlag): FlagResponse {
     type: flag.type,
     enabled: flag.enabled,
     rolloutPercentage: flag.rolloutPercentage,
+    ...(variants && { variants: variants.map(toVariantResponse) }),
     createdAt: flag.createdAt.toISOString(),
     updatedAt: flag.updatedAt.toISOString(),
   };
