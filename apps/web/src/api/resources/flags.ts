@@ -1,14 +1,12 @@
 import type {
-  CreateFlagBody,
+  CreateFlagInput,
   FlagResponse,
   PaginationQuery,
   UpdateFlagBody,
 } from "@flagkit/shared/schemas";
 import { request, requestPage } from "../http.ts";
 
-/** Fields with a server-side default are optional for the caller. */
-export type CreateFlagInput = Pick<CreateFlagBody, "key" | "type"> &
-  Partial<Omit<CreateFlagBody, "key" | "type">>;
+export type { CreateFlagInput };
 
 const base = (projectId: string) => `/projects/${projectId}/flags`;
 

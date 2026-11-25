@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CreateFlagBody } from "@flagkit/shared/schemas";
+import { CreateFlagBody, CreateFlagFields } from "@flagkit/shared/schemas";
+import type { CreateFlagInput, FlagType } from "@flagkit/shared/schemas";
 import { ChevronRight, Info, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -13,10 +14,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCurrentProject } from "@/features/projects/project-context";
 import { paths } from "@/routes/paths";
 import { useCreateFlag } from "../hooks";
+import { initialVariants, toVariantInputs } from "../variants";
 import { FlagTypePicker } from "./flag-type-picker";
+import { VariantsEditor } from "./variants-editor";
 
 // Only the fields typed into the form. The switch and rollout are plain state below.
-const FormSchema = CreateFlagBody.pick({ key: true, description: true });
+const FormSchema = CreateFlagFields.pick({ key: true, description: true });
 
 interface FormValues {
   key: string;
@@ -57,6 +60,9 @@ export function CreateFlagForm() {
   const create = useCreateFlag(project.id);
   const [enabled, setEnabled] = useState(true);
   const [rollout, setRollout] = useState(100);
+  const [type, setType] = useState<FlagType>("boolean");
+  const [variants, setVariants] = useState(initialVariants);
+  const [variantsError, setVariantsError] = useState<string>();
 
   const {
     register,
@@ -69,23 +75,34 @@ export function CreateFlagForm() {
   const key = useWatch({ control, name: "key" });
 
   const onSubmit = handleSubmit((values) => {
-    create.mutate(
-      {
-        key: values.key,
-        description: values.description || undefined,
-        type: "boolean",
-        enabled,
-        rolloutPercentage: rollout,
+    const common = { key: values.key, description: values.description || undefined, enabled };
+    let body: CreateFlagInput;
+
+    if (type === "multivariate") {
+      const inputs = toVariantInputs(variants);
+      if ("error" in inputs) {
+        setVariantsError(inputs.error);
+        return;
+      }
+      body = { ...common, type, variants: inputs.variants };
+      const parsed = CreateFlagBody.safeParse(body);
+      if (!parsed.success) {
+        setVariantsError(parsed.error.issues[0]?.message);
+        return;
+      }
+    } else {
+      body = { ...common, type, rolloutPercentage: rollout };
+    }
+    setVariantsError(undefined);
+
+    create.mutate(body, {
+      onSuccess: () => navigate(paths.dashboard),
+      onError: (err) => {
+        if (isApiError(err) && err.code === "ALREADY_EXISTS") {
+          setError("key", { message: "A flag with this key already exists" });
+        }
       },
-      {
-        onSuccess: () => navigate(paths.dashboard),
-        onError: (err) => {
-          if (isApiError(err) && err.code === "ALREADY_EXISTS") {
-            setError("key", { message: "A flag with this key already exists" });
-          }
-        },
-      },
-    );
+    });
   });
 
   const showGenericError =
@@ -183,43 +200,54 @@ export function CreateFlagForm() {
 
         <div className="space-y-4">
           <Card title="Flag type" hint="How the flag is evaluated">
-            <FlagTypePicker />
+            <FlagTypePicker value={type} onChange={setType} />
           </Card>
 
-          <Card title="Release conditions">
-            <p className="text-muted-foreground">
-              Choose how many users get this flag once it's enabled. Targeting by user properties is
-              coming soon.
-            </p>
-            <div className="mt-5 flex items-center gap-4">
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={rollout}
-                onChange={(e) => setRollout(clampPercent(e.target.valueAsNumber))}
-                aria-label="Rollout percentage"
-                className="h-2 flex-1 cursor-pointer accent-primary"
-              />
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
+          {type === "multivariate" ? (
+            <Card title="Variants" hint="The values the flag can return">
+              <VariantsEditor variants={variants} onChange={setVariants} />
+              {variantsError && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {variantsError}
+                </p>
+              )}
+            </Card>
+          ) : (
+            <Card title="Release conditions">
+              <p className="text-muted-foreground">
+                Choose how many users get this flag once it's enabled. Targeting by user properties
+                is coming soon.
+              </p>
+              <div className="mt-5 flex items-center gap-4">
+                <input
+                  type="range"
                   min={0}
                   max={100}
                   value={rollout}
                   onChange={(e) => setRollout(clampPercent(e.target.valueAsNumber))}
                   aria-label="Rollout percentage"
-                  className="h-9 w-20 text-right"
+                  className="h-2 flex-1 cursor-pointer accent-primary"
                 />
-                <span className="text-sm text-muted-foreground">%</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={rollout}
+                    onChange={(e) => setRollout(clampPercent(e.target.valueAsNumber))}
+                    aria-label="Rollout percentage"
+                    className="h-9 w-20 text-right"
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
               </div>
-            </div>
-            <p className="mt-4 text-sm text-muted-foreground">
-              {enabled
-                ? `Rolled out to ${rollout}% of users.`
-                : "The flag is disabled, so no one gets it until you enable it."}
-            </p>
-          </Card>
+              <p className="mt-4 text-sm text-muted-foreground">
+                {enabled
+                  ? `Rolled out to ${rollout}% of users.`
+                  : "The flag is disabled, so no one gets it until you enable it."}
+              </p>
+            </Card>
+          )}
         </div>
       </form>
     </>
