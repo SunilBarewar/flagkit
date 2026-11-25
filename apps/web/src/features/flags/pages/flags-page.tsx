@@ -1,13 +1,13 @@
 import { Loader2, Plus } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
-import { useCurrentProject } from "@/features/projects/project-context";
-import { paths } from "@/routes/paths";
+import { useCurrentProject, useProjectPaths } from "@/features/projects/project-context";
 import { FlagsEmptyState } from "../components/flags-empty-state";
 import { FlagsTable } from "../components/flags-table";
 import { useFlags, useToggleFlag } from "../hooks";
 
 export function FlagsPage() {
+  const links = useProjectPaths();
   const { project } = useCurrentProject();
   const { data: flags, isPending, isError, refetch } = useFlags(project.id);
   const toggle = useToggleFlag(project.id);
@@ -20,7 +20,7 @@ export function FlagsPage() {
         </div>
         {flags && flags.length > 0 && (
           <Button asChild className="h-11">
-            <Link to={paths.newFlag}>
+            <Link to={links.newFlag}>
               <Plus /> Create feature flag
             </Link>
           </Button>

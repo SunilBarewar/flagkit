@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { paths } from "@/routes/paths";
+import { useProjectPaths } from "@/features/projects/project-context";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
@@ -15,6 +15,7 @@ interface FlagsTableProps {
 }
 
 export function FlagsTable({ flags, onToggle, isToggling }: FlagsTableProps) {
+  const links = useProjectPaths();
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
       <table className="w-full text-sm">
@@ -42,7 +43,7 @@ export function FlagsTable({ flags, onToggle, isToggling }: FlagsTableProps) {
             <tr key={flag.id} className="hover:bg-muted/30">
               <td className="px-5 py-3">
                 <Link
-                  to={paths.flag(flag.id)}
+                  to={links.flag(flag.id)}
                   className="block max-w-md truncate font-mono font-medium hover:underline"
                 >
                   {flag.key}
@@ -72,12 +73,12 @@ export function FlagsTable({ flags, onToggle, isToggling }: FlagsTableProps) {
               <td className="whitespace-nowrap px-5 py-3">
                 <div className="flex justify-end gap-2">
                   <Button asChild variant="ghost" size="sm">
-                    <Link to={paths.flagTest(flag.id)} aria-label={`Test ${flag.key}`}>
+                    <Link to={links.flagTest(flag.id)} aria-label={`Test ${flag.key}`}>
                       <Play /> Test
                     </Link>
                   </Button>
                   <Button asChild variant="outline" size="sm">
-                    <Link to={paths.flag(flag.id)} aria-label={`Edit ${flag.key}`}>
+                    <Link to={links.flag(flag.id)} aria-label={`Edit ${flag.key}`}>
                       <Pencil /> Edit
                     </Link>
                   </Button>

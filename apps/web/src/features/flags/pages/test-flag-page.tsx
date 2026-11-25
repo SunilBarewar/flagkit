@@ -2,12 +2,12 @@ import { ChevronRight, Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useCurrentProject } from "@/features/projects/project-context";
-import { paths } from "@/routes/paths";
+import { useCurrentProject, useProjectPaths } from "@/features/projects/project-context";
 import { TestFlagWorkspace } from "../components/test-flag-workspace";
 import { useFlag } from "../hooks";
 
 export function TestFlagPage() {
+  const links = useProjectPaths();
   const { flagId = "" } = useParams();
   const { project } = useCurrentProject();
   const { data: flag, isPending, isError } = useFlag(project.id, flagId);
@@ -25,7 +25,7 @@ export function TestFlagPage() {
       <main className="flex flex-col items-center gap-3 py-20 text-muted-foreground">
         <p>Couldn't find this flag.</p>
         <Button asChild variant="outline">
-          <Link to={paths.dashboard}>Back to feature flags</Link>
+          <Link to={links.flags}>Back to feature flags</Link>
         </Button>
       </main>
     );
@@ -36,11 +36,11 @@ export function TestFlagPage() {
       <div className="sticky top-14 z-30 border-b bg-background">
         <div className="flex h-14 items-center justify-between gap-4 px-4">
           <nav className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-            <Link to={paths.dashboard} className="hover:text-foreground">
+            <Link to={links.flags} className="hover:text-foreground">
               Feature flags
             </Link>
             <ChevronRight className="size-4 shrink-0" />
-            <Link to={paths.flag(flag.id)} className="truncate hover:text-foreground">
+            <Link to={links.flag(flag.id)} className="truncate hover:text-foreground">
               {flag.key}
             </Link>
             <ChevronRight className="size-4 shrink-0" />
@@ -50,7 +50,7 @@ export function TestFlagPage() {
             </Badge>
           </nav>
           <Button asChild variant="outline">
-            <Link to={paths.flag(flag.id)}>Edit flag</Link>
+            <Link to={links.flag(flag.id)}>Edit flag</Link>
           </Button>
         </div>
       </div>

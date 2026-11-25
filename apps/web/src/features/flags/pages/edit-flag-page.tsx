@@ -1,12 +1,12 @@
 import { Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
-import { useCurrentProject } from "@/features/projects/project-context";
-import { paths } from "@/routes/paths";
+import { useCurrentProject, useProjectPaths } from "@/features/projects/project-context";
 import { EditFlagForm } from "../components/edit-flag-form";
 import { useFlag } from "../hooks";
 
 export function EditFlagPage() {
+  const links = useProjectPaths();
   const { flagId = "" } = useParams();
   const { project } = useCurrentProject();
   const { data: flag, isPending, isError } = useFlag(project.id, flagId);
@@ -24,7 +24,7 @@ export function EditFlagPage() {
       <main className="flex flex-col items-center gap-3 py-20 text-muted-foreground">
         <p>Couldn't find this flag.</p>
         <Button asChild variant="outline">
-          <Link to={paths.dashboard}>Back to feature flags</Link>
+          <Link to={links.flags}>Back to feature flags</Link>
         </Button>
       </main>
     );

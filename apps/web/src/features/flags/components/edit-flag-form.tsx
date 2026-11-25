@@ -12,8 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useCurrentProject } from "@/features/projects/project-context";
-import { paths } from "@/routes/paths";
+import { useCurrentProject, useProjectPaths } from "@/features/projects/project-context";
 import { useSaveFlag } from "../hooks";
 import { newRule, toRuleDrafts, toRuleInputs } from "../rules";
 import { toVariantDrafts, toVariantInputs } from "../variants";
@@ -30,6 +29,7 @@ interface FormValues {
 const FORM_ID = "edit-flag-form";
 
 export function EditFlagForm({ flag }: { flag: FlagResponse }) {
+  const links = useProjectPaths();
   const { project } = useCurrentProject();
   const save = useSaveFlag(project.id);
   const [enabled, setEnabled] = useState(flag.enabled);
@@ -114,7 +114,7 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
       <div className="sticky top-14 z-30 border-b bg-background">
         <div className="flex h-14 items-center justify-between gap-4 px-4">
           <nav className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-            <Link to={paths.dashboard} className="hover:text-foreground">
+            <Link to={links.flags} className="hover:text-foreground">
               Feature flags
             </Link>
             <ChevronRight className="size-4 shrink-0" />
@@ -133,12 +133,12 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
               </span>
             )}
             <Button asChild variant="ghost">
-              <Link to={paths.flagTest(flag.id)}>
+              <Link to={links.flagTest(flag.id)}>
                 <Play /> Test
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link to={paths.dashboard}>Back</Link>
+              <Link to={links.flags}>Back</Link>
             </Button>
             <Button
               type="submit"

@@ -12,8 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useCurrentProject } from "@/features/projects/project-context";
-import { paths } from "@/routes/paths";
+import { useCurrentProject, useProjectPaths } from "@/features/projects/project-context";
 import { useCreateFlag } from "../hooks";
 import { newRule, toRuleInputs } from "../rules";
 import { initialVariants, toVariantInputs } from "../variants";
@@ -33,6 +32,7 @@ interface FormValues {
 const FORM_ID = "create-flag-form";
 
 export function CreateFlagForm() {
+  const links = useProjectPaths();
   const { project } = useCurrentProject();
   const navigate = useNavigate();
   const create = useCreateFlag(project.id);
@@ -88,7 +88,7 @@ export function CreateFlagForm() {
     }
 
     create.mutate(body, {
-      onSuccess: (flag) => navigate(paths.flag(flag.id)),
+      onSuccess: (flag) => navigate(links.flag(flag.id)),
       onError: (err) => {
         if (isApiError(err) && err.code === "ALREADY_EXISTS") {
           setError("key", { message: "A flag with this key already exists" });
@@ -105,7 +105,7 @@ export function CreateFlagForm() {
       <div className="sticky top-14 z-30 border-b bg-background">
         <div className="flex h-14 items-center justify-between gap-4 px-4">
           <nav className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-            <Link to={paths.dashboard} className="hover:text-foreground">
+            <Link to={links.flags} className="hover:text-foreground">
               Feature flags
             </Link>
             <ChevronRight className="size-4 shrink-0" />
@@ -113,7 +113,7 @@ export function CreateFlagForm() {
           </nav>
           <div className="flex items-center gap-2">
             <Button asChild variant="outline">
-              <Link to={paths.dashboard}>Cancel</Link>
+              <Link to={links.flags}>Cancel</Link>
             </Button>
             <Button type="submit" form={FORM_ID} disabled={create.isPending}>
               {create.isPending && <Loader2 className="animate-spin" />}

@@ -3,10 +3,12 @@ export const paths = {
   landing: "/",
   login: "/login",
   signup: "/signup",
+  /** Not a page: sends you to your last-used (or default) project. */
   dashboard: "/dashboard",
-  newFlag: "/dashboard/flags/new",
-  flag: (flagId: string) => `/dashboard/flags/${flagId}`,
-  flagPattern: "/dashboard/flags/:flagId",
-  flagTest: (flagId: string) => `/dashboard/flags/${flagId}/test`,
-  flagTestPattern: "/dashboard/flags/:flagId/test",
+  projectPattern: "/project/:projectId",
+  project: (projectId: string) => `/project/${projectId}`,
+  flags: (projectId: string) => `/project/${projectId}/flags`,
+  newFlag: (projectId: string) => `/project/${projectId}/flags/new`,
+  flag: (projectId: string, flagId: string) => `/project/${projectId}/flags/${flagId}`,
+  flagTest: (projectId: string, flagId: string) => `/project/${projectId}/flags/${flagId}/test`,
 } as const;

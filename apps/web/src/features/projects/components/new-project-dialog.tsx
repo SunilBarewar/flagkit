@@ -16,7 +16,6 @@ import { Label } from "@/components/ui/label";
 import { paths } from "@/routes/paths";
 import { useCreateProject } from "../hooks";
 import { ApiKeyField } from "./api-key-field";
-import { useCurrentProject } from "../project-context";
 
 /**
  * Asks for a name, creates the project, then shows its API key. The key is returned only once and
@@ -24,7 +23,6 @@ import { useCurrentProject } from "../project-context";
  * Mount it to open it, and unmount it (`onClose`) to close it.
  */
 export function NewProjectDialog({ onClose }: { onClose: () => void }) {
-  const { select } = useCurrentProject();
   const navigate = useNavigate();
   const create = useCreateProject();
   const [name, setName] = useState("");
@@ -44,8 +42,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
 
   const finish = () => {
     if (created) {
-      select(created.project.id);
-      navigate(paths.dashboard);
+      navigate(paths.flags(created.project.id));
     }
     onClose();
   };

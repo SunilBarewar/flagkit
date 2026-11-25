@@ -1,9 +1,10 @@
 import { Flag, Plus } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
-import { paths } from "@/routes/paths";
+import { useProjectPaths } from "@/features/projects/project-context";
 
 export function FlagsEmptyState() {
+  const links = useProjectPaths();
   return (
     <div className="flex flex-col items-center rounded-2xl border border-dashed bg-card px-6 py-20 text-center">
       <div className="flex size-14 items-center justify-center rounded-xl bg-brand-soft text-brand-soft-foreground">
@@ -14,7 +15,7 @@ export function FlagsEmptyState() {
         Flags let you turn features on and off and roll them out gradually, without a deploy.
       </p>
       <Button asChild size="lg" className="mt-6 h-10">
-        <Link to={paths.newFlag}>
+        <Link to={links.newFlag}>
           <Plus /> Create feature flag
         </Link>
       </Button>

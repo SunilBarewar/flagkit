@@ -21,7 +21,7 @@ export function ProjectPicker() {
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
-  const { project: selected, projects, select } = useCurrentProject();
+  const { project: selected, projects } = useCurrentProject();
   const selectedId = selected.id;
   const filtered = projects.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
 
@@ -66,11 +66,8 @@ export function ProjectPicker() {
                 key={project.id}
                 type="button"
                 onClick={() => {
-                  // A flag belongs to one project, so go back to the list rather than stay on it.
-                  if (project.id !== selectedId) {
-                    select(project.id);
-                    navigate(paths.dashboard);
-                  }
+                  // A flag belongs to one project, so go to that project's list rather than stay on it.
+                  if (project.id !== selectedId) navigate(paths.flags(project.id));
                   setOpen(false);
                 }}
                 className={cn(
