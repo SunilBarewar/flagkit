@@ -3,6 +3,8 @@ import type {
   FlagResponse,
   PaginationQuery,
   UpdateFlagBody,
+  VariantInput,
+  VariantResponse,
 } from "@flagkit/shared/schemas";
 import { request, requestPage } from "../http.ts";
 
@@ -22,6 +24,13 @@ export const flags = {
 
   update: (projectId: string, flagId: string, body: UpdateFlagBody) =>
     request<FlagResponse>({ method: "PATCH", url: `${base(projectId)}/${flagId}`, data: body }),
+
+  replaceVariants: (projectId: string, flagId: string, variants: VariantInput[]) =>
+    request<VariantResponse[]>({
+      method: "PUT",
+      url: `${base(projectId)}/${flagId}/variants`,
+      data: { variants },
+    }),
 
   delete: (projectId: string, flagId: string) =>
     request<null>({ method: "DELETE", url: `${base(projectId)}/${flagId}` }),

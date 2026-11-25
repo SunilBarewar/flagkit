@@ -1,4 +1,4 @@
-import type { VariantInput } from "@flagkit/shared/schemas";
+import type { VariantInput, VariantResponse } from "@flagkit/shared/schemas";
 
 /** A variant as edited in the form. Nothing is saved until the flag is. */
 export interface VariantDraft {
@@ -18,6 +18,17 @@ export const newVariant = (patch: Partial<VariantDraft> = {}): VariantDraft => (
   payload: "",
   ...patch,
 });
+
+export const toVariantDrafts = (variants: VariantResponse[]): VariantDraft[] =>
+  variants.map((variant) =>
+    newVariant({
+      id: variant.id,
+      key: variant.key,
+      rolloutPercentage: variant.rolloutPercentage,
+      description: variant.description ?? "",
+      payload: variant.payload === null ? "" : JSON.stringify(variant.payload, null, 2),
+    }),
+  );
 
 export const initialVariants = () => [
   newVariant({ key: "variant-a", rolloutPercentage: 50 }),

@@ -48,7 +48,7 @@ export function VariantsEditor({ variants, onChange }: VariantsEditorProps) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className={cn("text-sm", total === 100 ? "text-muted-foreground" : "text-destructive")}>
-Percentage rollouts for variants must sum to 100 (currently {total}).
+          Percentage rollouts for variants must sum to 100 (currently {total}).
         </p>
         <div className="flex items-center gap-1">
           <Button
