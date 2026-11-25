@@ -1,7 +1,14 @@
 import { and, count, desc, eq } from "drizzle-orm";
 
 import { db } from "../instance.ts";
-import { featureFlags, type FeatureFlag, type NewFeatureFlag } from "../schema/index.ts";
+import {
+  featureFlags,
+  flagVariants,
+  type FeatureFlag,
+  type FlagVariant,
+  type NewFeatureFlag,
+} from "../schema/index.ts";
+import type { FlagVariantInput } from "./flag-variants.ts";
 
 export type InsertFeatureFlagInput = Pick<
   NewFeatureFlag,
@@ -16,6 +23,27 @@ export type InsertFeatureFlagInput = Pick<
 export async function insertFeatureFlag(input: InsertFeatureFlagInput): Promise<FeatureFlag> {
   const [flag] = await db.insert(featureFlags).values(input).returning();
   return flag!;
+}
+
+/**
+ * Insert a multivariate flag and its variants in one transaction, so a flag never exists
+ * without them. Throws the same Postgres errors as `insertFeatureFlag`.
+ */
+export async function insertMultivariateFeatureFlag(
+  input: Pick<InsertFeatureFlagInput, "projectId" | "key" | "description" | "enabled">,
+  variants: FlagVariantInput[],
+): Promise<{ flag: FeatureFlag; variants: FlagVariant[] }> {
+  return db.transaction(async (tx) => {
+    const [flag] = await tx
+      .insert(featureFlags)
+      .values({ ...input, type: "multivariate" })
+      .returning();
+    const rows = await tx
+      .insert(flagVariants)
+      .values(variants.map((variant) => ({ ...variant, flagId: flag!.id })))
+      .returning();
+    return { flag: flag!, variants: rows };
+  });
 }
 
 /** One page of a project's flags, newest first (ids are time-ordered UUIDv7). */

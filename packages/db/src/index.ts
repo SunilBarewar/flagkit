@@ -9,8 +9,10 @@ export * from "./queries/index.ts";
 export type {
   Account,
   FeatureFlag,
+  FlagVariant,
   NewAccount,
   NewFeatureFlag,
+  NewFlagVariant,
   NewProject,
   Project,
 } from "./schema/index.ts";
