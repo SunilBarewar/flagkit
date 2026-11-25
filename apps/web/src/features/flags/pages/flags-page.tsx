@@ -3,8 +3,8 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useCurrentProject } from "@/features/projects/project-context";
 import { paths } from "@/routes/paths";
-import { FlagRow } from "../components/flag-row";
 import { FlagsEmptyState } from "../components/flags-empty-state";
+import { FlagsTable } from "../components/flags-table";
 import { useFlags, useToggleFlag } from "../hooks";
 
 export function FlagsPage() {
@@ -13,7 +13,7 @@ export function FlagsPage() {
   const toggle = useToggleFlag(project.id);
 
   return (
-    <main className="px-4 py-4">
+    <main className="mx-auto max-w-4xl px-4 py-4">
       <div className="flex min-h-10 items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Feature flags</h1>
@@ -46,16 +46,11 @@ export function FlagsPage() {
         {flags && flags.length === 0 && <FlagsEmptyState />}
 
         {flags && flags.length > 0 && (
-          <ul className="divide-y rounded-xl border bg-card">
-            {flags.map((flag) => (
-              <FlagRow
-                key={flag.id}
-                flag={flag}
-                disabled={toggle.isPending && toggle.variables.flagId === flag.id}
-                onToggle={(enabled) => toggle.mutate({ flagId: flag.id, enabled })}
-              />
-            ))}
-          </ul>
+          <FlagsTable
+            flags={flags}
+            onToggle={(flagId, enabled) => toggle.mutate({ flagId, enabled })}
+            isToggling={(flagId) => toggle.isPending && toggle.variables.flagId === flagId}
+          />
         )}
       </div>
     </main>
