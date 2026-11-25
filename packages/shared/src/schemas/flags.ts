@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { RuleResponse, RuleSet } from "./rules.ts";
 import { VariantResponse, VariantSet } from "./variants.ts";
 
 export const FlagType = z.enum(["boolean", "multivariate"]);
@@ -13,19 +14,17 @@ export const FlagKey = z
   .regex(/^[a-z0-9_-]+$/, "Use lowercase letters, numbers, underscores and hyphens");
 
 const Description = z.string().trim().max(500);
-const RolloutPercentage = z.int().min(0).max(100);
 
 export const CreateFlagFields = z.object({
   key: FlagKey,
   description: Description.optional(),
   enabled: z.boolean().default(false),
+  /** Defaults to one rule with no conditions at 0%, so a new flag reaches nobody until it is edited. */
+  rules: RuleSet.optional(),
 });
 
 export const CreateFlagBody = z.discriminatedUnion("type", [
-  CreateFlagFields.extend({
-    type: z.literal("boolean"),
-    rolloutPercentage: RolloutPercentage.default(100),
-  }),
+  CreateFlagFields.extend({ type: z.literal("boolean") }),
   CreateFlagFields.extend({ type: z.literal("multivariate"), variants: VariantSet }),
 ]);
 export type CreateFlagBody = z.infer<typeof CreateFlagBody>;
@@ -36,10 +35,9 @@ export const UpdateFlagBody = z
   .object({
     description: Description.nullable().optional(),
     enabled: z.boolean().optional(),
-    rolloutPercentage: RolloutPercentage.optional(),
   })
   .refine((body) => Object.values(body).some((value) => value !== undefined), {
-    message: "Provide at least one of: description, enabled, rolloutPercentage",
+    message: "Provide at least one of: description, enabled",
   });
 export type UpdateFlagBody = z.infer<typeof UpdateFlagBody>;
 
@@ -50,8 +48,9 @@ export const FlagResponse = z.object({
   description: z.string().nullable(),
   type: FlagType,
   enabled: z.boolean(),
-  rolloutPercentage: z.int(),
-  /** Included for multivariate flags when they are created. */
+  /** Included when a single flag is fetched or created. */
+  rules: z.array(RuleResponse).optional(),
+  /** Included for multivariate flags when a single flag is fetched or created. */
   variants: z.array(VariantResponse).optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

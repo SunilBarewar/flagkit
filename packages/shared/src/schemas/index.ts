@@ -6,4 +6,5 @@ export * from "./projects.ts";
 export * from "./response.ts";
 export * from "./flags.ts";
 export * from "./variants.ts";
+export * from "./rules.ts";
 export * from "./evaluate.ts";

@@ -3,12 +3,14 @@ import { z } from "zod";
 export const MIN_VARIANTS = 2;
 export const MAX_VARIANTS = 20;
 
+export const VariantKey = z
+  .string()
+  .min(1, "Give every variant a key")
+  .max(100)
+  .regex(/^[a-z0-9_-]+$/, "Use lowercase letters, numbers, underscores and hyphens");
+
 export const VariantInput = z.object({
-  key: z
-    .string()
-    .min(1, "Give every variant a key")
-    .max(100)
-    .regex(/^[a-z0-9_-]+$/, "Use lowercase letters, numbers, underscores and hyphens"),
+  key: VariantKey,
   description: z.string().trim().max(500).optional(),
   payload: z.json().optional(),
   rolloutPercentage: z.int().min(0).max(100),
