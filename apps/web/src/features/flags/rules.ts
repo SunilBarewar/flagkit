@@ -50,7 +50,7 @@ export const newRule = (patch: Partial<RuleDraft> = {}): RuleDraft => ({
 type Scalar = string | number | boolean;
 
 /** `25` is a number and `true` a boolean. Wrap text in quotes ("25") to keep it as text. */
-function parseScalar(text: string): Scalar {
+export function parseScalar(text: string): Scalar {
   const trimmed = text.trim();
   try {
     const parsed: unknown = JSON.parse(trimmed);

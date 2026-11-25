@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/api";
 import type { CreateFlagInput } from "@/api";
-import type { ReplaceRulesInput, UpdateFlagBody, VariantInput } from "@flagkit/shared/schemas";
+import type {
+  EvaluationContext,
+  ReplaceRulesInput,
+  UpdateFlagBody,
+  VariantInput,
+} from "@flagkit/shared/schemas";
 
 export const flagsKey = (projectId: string) => ["flags", projectId] as const;
 
@@ -61,3 +66,9 @@ export function useSaveFlag(projectId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: flagsKey(projectId) }),
   });
 }
+
+export const useTestFlag = (projectId: string, flagId: string) =>
+  useMutation({
+    mutationFn: (context: EvaluationContext) =>
+      apiClient.flags.evaluate(projectId, flagId, context),
+  });

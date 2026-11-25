@@ -1,6 +1,6 @@
 import { MAX_CONDITIONS, MAX_RULES } from "@flagkit/shared/schemas";
 import type { ConditionOperator } from "@flagkit/shared/schemas";
-import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
@@ -17,7 +17,7 @@ const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(val
 const PRESETS = [0, 10, 25, 50, 75, 100];
 
 const selectClass =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
+  "h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 const CONDITION_GRID = "grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[1fr_9.5rem_1fr_2rem]";
 
@@ -31,7 +31,7 @@ const valuePlaceholder: Record<ConditionOperator, string> = {
   contains: "gmail.com",
 };
 
-const chipClass = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium";
+const chipClass = "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium";
 
 interface ReleaseConditionsProps {
   rules: RuleDraft[];
@@ -102,7 +102,7 @@ export function ReleaseConditions({
       <Button
         type="button"
         variant="outline"
-        className="mt-4 w-full border-dashed"
+        className="mt-4 w-40 border-dashed"
         disabled={rules.length >= MAX_RULES}
         onClick={add}
       >
@@ -112,7 +112,7 @@ export function ReleaseConditions({
       {error && (
         <p
           role="alert"
-          className="mt-3 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </p>
@@ -153,47 +153,61 @@ function RuleCard({
   return (
     <li
       className={cn(
-        "rounded-xl border bg-card p-4 transition-shadow",
-        editing && "shadow-sm ring-1 ring-primary/20",
+        "overflow-hidden rounded-md border bg-card",
+        editing && "ring-1 ring-primary/20",
         !rule.enabled && "bg-muted/40",
       )}
     >
-      <div className="flex items-start gap-3">
-        <span className="rounded-md bg-muted px-2.5 py-1 text-sm font-semibold">
-          Set {index + 1}
-        </span>
-        <div className="min-w-0 flex-1 space-y-2 pt-0.5">
-          <p className={cn(!rule.enabled && "text-muted-foreground")}>
-            Condition set will match{" "}
-            <strong>{reachesNobody ? "no users" : describeAudience(rule)}</strong>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <span
-              className={cn(
-                chipClass,
-                rule.rolloutPercentage === 0
-                  ? "border-destructive/30 bg-destructive/5 text-destructive"
-                  : "border-primary/30 bg-primary/5 text-primary",
-              )}
-            >
-              Rolled out to {rule.rolloutPercentage}% of users in this set
+      <div className="relative">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={editing}
+          aria-controls={`${rule.id}-panel`}
+          className={cn(
+            "flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none",
+            isFirst && isLast ? "pr-12" : "pr-28",
+          )}
+        >
+          <span className="rounded-md bg-muted px-2.5 py-1 text-sm font-semibold">
+            Set {index + 1}
+          </span>
+          <span className="min-w-0 flex-1 space-y-2 pt-0.5">
+            <span className={cn("block", !rule.enabled && "text-muted-foreground")}>
+              Condition set will match{" "}
+              <strong>{reachesNobody ? "no users" : describeAudience(rule)}</strong>
             </span>
-            {rule.variantKey && (
-              <span className={cn(chipClass, "text-muted-foreground")}>
-                Serves {rule.variantKey}
+            <span className="flex flex-wrap gap-2">
+              <span
+                className={cn(
+                  chipClass,
+                  rule.rolloutPercentage === 0
+                    ? "border-destructive/30 bg-destructive/5 text-destructive"
+                    : "border-primary/30 bg-primary/5 text-primary",
+                )}
+              >
+                Rolled out to {rule.rolloutPercentage}% of users in this set
               </span>
-            )}
-            {!rule.enabled && (
-              <span className={cn(chipClass, "text-muted-foreground")}>Turned off</span>
-            )}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
+              {rule.variantKey && (
+                <span className={cn(chipClass, "text-muted-foreground")}>
+                  Serves {rule.variantKey}
+                </span>
+              )}
+              {!rule.enabled && (
+                <span className={cn(chipClass, "text-muted-foreground")}>Turned off</span>
+              )}
+            </span>
+          </span>
+        </button>
+
+        {/* Sits over the header's right edge. Only the arrows take clicks; the chevron lets them through to the row. */}
+        <div className="pointer-events-none absolute top-3 right-3 flex items-center gap-1">
           {!isFirst && (
             <Button
               type="button"
               variant="ghost"
               size="icon"
+              className="pointer-events-auto"
               onClick={() => onMove(-1)}
               aria-label={`Move set ${index + 1} up`}
             >
@@ -205,26 +219,21 @@ function RuleCard({
               type="button"
               variant="ghost"
               size="icon"
+              className="pointer-events-auto"
               onClick={() => onMove(1)}
               aria-label={`Move set ${index + 1} down`}
             >
               <ArrowDown />
             </Button>
           )}
-          <Button
-            type="button"
-            variant={editing ? "default" : "outline"}
-            size="icon"
-            onClick={onToggle}
-            aria-label={editing ? `Done editing set ${index + 1}` : `Edit set ${index + 1}`}
-          >
-            {editing ? <Check /> : <Pencil />}
-          </Button>
+          <span className="flex size-8 items-center justify-center text-muted-foreground">
+            <ChevronDown className={cn("size-4 transition-transform", editing && "rotate-180")} />
+          </span>
         </div>
       </div>
 
       {editing && (
-        <div className="mt-4 space-y-6 border-t pt-5">
+        <div id={`${rule.id}-panel`} className="space-y-6 border-t p-4 pt-5">
           <ConditionsEditor rule={rule} setIndex={index} onChange={onChange} />
           <RolloutEditor rule={rule} setIndex={index} onChange={onChange} />
 
@@ -312,7 +321,7 @@ function ConditionsEditor({ rule, setIndex, onChange }: EditorProps) {
       <h3 className="text-sm font-semibold">Match users where</h3>
 
       {rule.conditions.length === 0 ? (
-        <p className="rounded-lg border border-dashed px-3 py-3 text-sm text-muted-foreground">
+        <p className="rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
           No conditions, so this set matches all users.
         </p>
       ) : (

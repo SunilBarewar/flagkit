@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CreateFlagFields, ReplaceVariantsBody } from "@flagkit/shared/schemas";
 import type { FlagResponse } from "@flagkit/shared/schemas";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight, Loader2, Play } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
@@ -101,6 +101,11 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
             </Badge>
           </nav>
           <div className="flex items-center gap-2">
+            <Button asChild variant="ghost">
+              <Link to={paths.flagTest(flag.id)}>
+                <Play /> Test
+              </Link>
+            </Button>
             <Button asChild variant="outline">
               <Link to={paths.dashboard}>Cancel</Link>
             </Button>

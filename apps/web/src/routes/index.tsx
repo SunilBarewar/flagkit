@@ -5,6 +5,7 @@ import { SignupPage } from "@/features/auth/pages/signup-page";
 import { LandingPage } from "@/features/landing/pages/landing-page";
 import { CreateFlagPage } from "@/features/flags/pages/create-flag-page";
 import { EditFlagPage } from "@/features/flags/pages/edit-flag-page";
+import { TestFlagPage } from "@/features/flags/pages/test-flag-page";
 import { FlagsPage } from "@/features/flags/pages/flags-page";
 import { GuestRoute, ProtectedRoute } from "./guards";
 import { paths } from "./paths";
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
           { path: paths.dashboard, element: <FlagsPage /> },
           { path: paths.newFlag, element: <CreateFlagPage /> },
           { path: paths.flagPattern, element: <EditFlagPage /> },
+          { path: paths.flagTestPattern, element: <TestFlagPage /> },
         ],
       },
     ],

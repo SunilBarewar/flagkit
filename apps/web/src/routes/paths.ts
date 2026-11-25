@@ -7,4 +7,6 @@ export const paths = {
   newFlag: "/dashboard/flags/new",
   flag: (flagId: string) => `/dashboard/flags/${flagId}`,
   flagPattern: "/dashboard/flags/:flagId",
+  flagTest: (flagId: string) => `/dashboard/flags/${flagId}/test`,
+  flagTestPattern: "/dashboard/flags/:flagId/test",
 } as const;

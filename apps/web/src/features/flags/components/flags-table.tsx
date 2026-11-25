@@ -1,5 +1,5 @@
 import type { FlagResponse } from "@flagkit/shared/schemas";
-import { Pencil } from "lucide-react";
+import { Pencil, Play } from "lucide-react";
 import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,12 @@ export function FlagsTable({ flags, onToggle, isToggling }: FlagsTableProps) {
                 </div>
               </td>
               <td className="whitespace-nowrap px-5 py-3">
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to={paths.flagTest(flag.id)} aria-label={`Test ${flag.key}`}>
+                      <Play /> Test
+                    </Link>
+                  </Button>
                   <Button asChild variant="outline" size="sm">
                     <Link to={paths.flag(flag.id)} aria-label={`Edit ${flag.key}`}>
                       <Pencil /> Edit
