@@ -4,3 +4,4 @@ export * from "./feature-flags.ts";
 export * from "./flag-variants.ts";
 export * from "./health.ts";
 export * from "./projects.ts";
+export * from "./targeting-rules.ts";

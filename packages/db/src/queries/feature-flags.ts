@@ -9,30 +9,41 @@ import {
   type NewFeatureFlag,
 } from "../schema/index.ts";
 import type { FlagVariantInput } from "./flag-variants.ts";
+import { insertRules } from "./rules-internal.ts";
+import type { RuleInput, RuleWithConditions } from "./rules-internal.ts";
 
 export type InsertFeatureFlagInput = Pick<
   NewFeatureFlag,
-  "projectId" | "key" | "description" | "type" | "enabled" | "rolloutPercentage"
+  "projectId" | "key" | "description" | "type" | "enabled"
 >;
 
 /**
- * Insert a new flag and return the created row.
- * Throws the Postgres unique violation (23505) if the key is taken within the project,
- * and the check violation (23514) if the rollout isn't between 0 and 100.
+ * Insert a new boolean flag together with its rules and return both.
+ * Throws the Postgres unique violation (23505) if the key is taken within the project.
  */
-export async function insertFeatureFlag(input: InsertFeatureFlagInput): Promise<FeatureFlag> {
-  const [flag] = await db.insert(featureFlags).values(input).returning();
-  return flag!;
+export async function insertFeatureFlag(
+  input: Omit<InsertFeatureFlagInput, "type">,
+  rules: RuleInput[],
+): Promise<{ flag: FeatureFlag; rules: RuleWithConditions[] }> {
+  return db.transaction(async (tx) => {
+    const [flag] = await tx
+      .insert(featureFlags)
+      .values({ ...input, type: "boolean" })
+      .returning();
+    return { flag: flag!, rules: await insertRules(tx, flag!.id, rules) };
+  });
 }
 
 /**
- * Insert a multivariate flag and its variants in one transaction, so a flag never exists
- * without them. Throws the same Postgres errors as `insertFeatureFlag`.
+ * Insert a multivariate flag with its variants and rules in one transaction, so a flag never
+ * exists without them. Rules refer to variants by key. Throws the same Postgres errors as
+ * `insertFeatureFlag`.
  */
 export async function insertMultivariateFeatureFlag(
-  input: Pick<InsertFeatureFlagInput, "projectId" | "key" | "description" | "enabled">,
+  input: Omit<InsertFeatureFlagInput, "type">,
   variants: FlagVariantInput[],
-): Promise<{ flag: FeatureFlag; variants: FlagVariant[] }> {
+  rules: RuleInput[],
+): Promise<{ flag: FeatureFlag; variants: FlagVariant[]; rules: RuleWithConditions[] }> {
   return db.transaction(async (tx) => {
     const [flag] = await tx
       .insert(featureFlags)
@@ -42,7 +53,7 @@ export async function insertMultivariateFeatureFlag(
       .insert(flagVariants)
       .values(variants.map((variant) => ({ ...variant, flagId: flag!.id })))
       .returning();
-    return { flag: flag!, variants: rows };
+    return { flag: flag!, variants: rows, rules: await insertRules(tx, flag!.id, rules) };
   });
 }
 
@@ -83,9 +94,7 @@ export async function findFeatureFlag(
 }
 
 /** The key and type are fixed once a flag exists: the SDK depends on both. */
-export type UpdateFeatureFlagInput = Partial<
-  Pick<NewFeatureFlag, "description" | "enabled" | "rolloutPercentage">
->;
+export type UpdateFeatureFlagInput = Partial<Pick<NewFeatureFlag, "description" | "enabled">>;
 
 /** Returns the updated row, or undefined if the project has no such flag. */
 export async function updateFeatureFlag(

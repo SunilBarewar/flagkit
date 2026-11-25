@@ -64,6 +64,13 @@
       "when": 1795580375996,
       "tag": "0008_backfill_default_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795582245841,
+      "tag": "0009_drop_flag_rollout_percentage",
+      "breakpoints": true
     }
   ]
 }
