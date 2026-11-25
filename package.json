@@ -9,6 +9,7 @@
     "db:generate": "pnpm --filter @flagkit/db db:generate",
     "db:migrate": "pnpm --filter @flagkit/db db:migrate",
     "db:studio": "pnpm --filter @flagkit/db db:studio",
+    "load-test": "node apps/api/scripts/load-test.mjs",
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
