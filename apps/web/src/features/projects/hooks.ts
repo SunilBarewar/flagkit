@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import type { CreateProjectBody } from "@flagkit/shared/schemas";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/api";
 
 export const projectsKey = ["projects"] as const;
@@ -9,3 +10,13 @@ export const useProjects = () =>
     queryKey: projectsKey,
     queryFn: () => apiClient.projects.list({ limit: 100 }).then((page) => page.data),
   });
+
+/** The result carries the project's API key, which is only ever returned here. */
+export function useCreateProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: CreateProjectBody) => apiClient.projects.create(body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: projectsKey }),
+  });
+}
