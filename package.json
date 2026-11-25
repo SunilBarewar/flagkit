@@ -5,6 +5,7 @@
   "scripts": {
     "build": "pnpm -r run build",
     "dev:api": "pnpm --filter @flagkit/api dev",
+    "dev:web": "pnpm --filter @flagkit/web dev",
     "db:generate": "pnpm --filter @flagkit/db db:generate",
     "db:migrate": "pnpm --filter @flagkit/db db:migrate",
     "db:studio": "pnpm --filter @flagkit/db db:studio",
