@@ -1,5 +1,5 @@
 import { CreateProjectBody } from "@flagkit/shared/schemas";
-import { Check, Copy, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { paths } from "@/routes/paths";
 import { useCreateProject } from "../hooks";
+import { ApiKeyField } from "./api-key-field";
 import { useCurrentProject } from "../project-context";
 
 /**
@@ -28,7 +29,6 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateProject();
   const [name, setName] = useState("");
   const [error, setError] = useState<string>();
-  const [copied, setCopied] = useState(false);
   const created = create.data;
 
   const submit = (e: React.FormEvent) => {
@@ -50,17 +50,6 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
-  const copy = async () => {
-    if (!created) return;
-    try {
-      await navigator.clipboard.writeText(created.apiKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard blocked: the key is selectable in the field.
-    }
-  };
-
   return (
     <Dialog open onOpenChange={(open) => !open && !created && onClose()}>
       <DialogContent
@@ -77,19 +66,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
                 once and can't be recovered later.
               </DialogDescription>
             </DialogHeader>
-            <div className="flex gap-2">
-              <Input
-                readOnly
-                value={created.apiKey}
-                aria-label="API key"
-                onFocus={(e) => e.currentTarget.select()}
-                className="h-9 font-mono text-xs"
-              />
-              <Button type="button" variant="outline" onClick={copy}>
-                {copied ? <Check /> : <Copy />}
-                {copied ? "Copied" : "Copy"}
-              </Button>
-            </div>
+            <ApiKeyField value={created.apiKey} />
             <DialogFooter>
               <Button type="button" onClick={finish}>
                 Done

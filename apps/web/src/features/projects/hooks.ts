@@ -20,3 +20,13 @@ export function useCreateProject() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: projectsKey }),
   });
 }
+
+/** The result carries the new API key, which is only ever returned here. */
+export function useRotateApiKey() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (projectId: string) => apiClient.projects.rotateApiKey(projectId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: projectsKey }),
+  });
+}

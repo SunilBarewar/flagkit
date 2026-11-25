@@ -28,6 +28,23 @@ export async function findProjectByIdAndAccountId(
   return project;
 }
 
+/**
+ * Swap in a new key. The old one stops working immediately because lookups use `apiKeyId`.
+ * Scoped to the owner, returns undefined if the project isn't theirs.
+ */
+export async function replaceProjectApiKey(
+  id: string,
+  accountId: string,
+  key: Pick<NewProject, "apiKeyId" | "apiKeyHash">,
+): Promise<Project | undefined> {
+  const [project] = await db
+    .update(projects)
+    .set(key)
+    .where(and(eq(projects.id, id), eq(projects.accountId, accountId)))
+    .returning();
+  return project;
+}
+
 /** Look a project up by the public part of its API key. */
 export async function findProjectByApiKeyId(apiKeyId: string): Promise<Project | undefined> {
   const [project] = await db
