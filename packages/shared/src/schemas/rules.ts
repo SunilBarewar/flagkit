@@ -2,6 +2,18 @@ import { z } from "zod";
 
 import { VariantKey } from "./variants.ts";
 
+export const CONDITION_OPERATORS = [
+  "equals",
+  "not_equals",
+  "in",
+  "not_in",
+  "greater_than",
+  "less_than",
+  "contains",
+] as const;
+export const ConditionOperator = z.enum(CONDITION_OPERATORS);
+export type ConditionOperator = z.infer<typeof ConditionOperator>;
+
 const Attribute = z.string().trim().min(1, "Choose a property").max(100);
 const Scalar = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -29,7 +41,6 @@ export const ConditionInput = z.discriminatedUnion("operator", [
   }),
 ]);
 export type ConditionInput = z.infer<typeof ConditionInput>;
-export type ConditionOperator = ConditionInput["operator"];
 
 export const MAX_RULES = 20;
 export const MAX_CONDITIONS = 20;
@@ -65,15 +76,7 @@ export const RuleResponse = z.object({
     z.object({
       id: z.uuid(),
       attribute: z.string(),
-      operator: z.enum([
-        "equals",
-        "not_equals",
-        "in",
-        "not_in",
-        "greater_than",
-        "less_than",
-        "contains",
-      ]),
+      operator: ConditionOperator,
       value: z.json(),
     }),
   ),
