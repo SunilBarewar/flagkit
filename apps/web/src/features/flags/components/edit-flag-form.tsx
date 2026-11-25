@@ -1,10 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CreateFlagFields, ReplaceVariantsBody } from "@flagkit/shared/schemas";
 import type { FlagResponse } from "@flagkit/shared/schemas";
-import { ChevronRight, Loader2, Play } from "lucide-react";
-import { useState } from "react";
+import { Check, ChevronRight, Loader2, Play } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
@@ -31,7 +31,6 @@ const FORM_ID = "edit-flag-form";
 
 export function EditFlagForm({ flag }: { flag: FlagResponse }) {
   const { project } = useCurrentProject();
-  const navigate = useNavigate();
   const save = useSaveFlag(project.id);
   const [enabled, setEnabled] = useState(flag.enabled);
   const [rules, setRules] = useState(() =>
@@ -40,16 +39,31 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
   const [rulesError, setRulesError] = useState<string>();
   const [variants, setVariants] = useState(() => toVariantDrafts(flag.variants ?? []));
   const [variantsError, setVariantsError] = useState<string>();
+  const [justSaved, setJustSaved] = useState(false);
+
+  // What is saved, to tell whether anything has changed. The description lives in the form itself.
+  const currentState = () => JSON.stringify({ rules, variants, enabled });
+  const [savedState, setSavedState] = useState(currentState);
+
+  // Confirm the save for a few seconds. The page stays put so you can carry on, or go and test.
+  useEffect(() => {
+    if (!justSaved) return;
+    const timer = setTimeout(() => setJustSaved(false), 3000);
+    return () => clearTimeout(timer);
+  }, [justSaved]);
   const multivariate = flag.type === "multivariate";
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    reset,
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
     defaultValues: { description: flag.description ?? "" },
   });
+
+  const hasChanges = isDirty || currentState() !== savedState;
 
   const onSubmit = handleSubmit((values) => {
     const body = {
@@ -80,9 +94,18 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
     setRulesError(nextRulesError);
     if (nextVariantsError || "error" in ruleInputs) return;
 
+    const submittedState = currentState();
+
     save.mutate(
       { flagId: flag.id, body, variants: variantInputs, rules: ruleInputs.rules },
-      { onSuccess: () => navigate(paths.dashboard) },
+      {
+        onSuccess: () => {
+          // What was just saved is the new starting point, so Save is disabled again.
+          setSavedState(submittedState);
+          reset({ description: values.description ?? "" });
+          setJustSaved(true);
+        },
+      },
     );
   });
 
@@ -101,15 +124,28 @@ export function EditFlagForm({ flag }: { flag: FlagResponse }) {
             </Badge>
           </nav>
           <div className="flex items-center gap-2">
+            {justSaved && (
+              <span
+                role="status"
+                className="flex items-center gap-1 pr-1 text-sm font-medium text-emerald-600 dark:text-emerald-400"
+              >
+                <Check className="size-4" /> Saved
+              </span>
+            )}
             <Button asChild variant="ghost">
               <Link to={paths.flagTest(flag.id)}>
                 <Play /> Test
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link to={paths.dashboard}>Cancel</Link>
+              <Link to={paths.dashboard}>Back</Link>
             </Button>
-            <Button type="submit" form={FORM_ID} disabled={save.isPending}>
+            <Button
+              type="submit"
+              form={FORM_ID}
+              disabled={save.isPending || !hasChanges}
+              title={hasChanges ? undefined : "No changes to save"}
+            >
               {save.isPending && <Loader2 className="animate-spin" />}
               Save
             </Button>

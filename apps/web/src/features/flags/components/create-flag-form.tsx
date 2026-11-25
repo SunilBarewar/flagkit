@@ -88,7 +88,7 @@ export function CreateFlagForm() {
     }
 
     create.mutate(body, {
-      onSuccess: () => navigate(paths.dashboard),
+      onSuccess: (flag) => navigate(paths.flag(flag.id)),
       onError: (err) => {
         if (isApiError(err) && err.code === "ALREADY_EXISTS") {
           setError("key", { message: "A flag with this key already exists" });
