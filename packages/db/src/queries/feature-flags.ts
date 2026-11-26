@@ -110,13 +110,16 @@ export async function updateFeatureFlag(
   return flag;
 }
 
-/** Returns true if a flag was deleted. */
-export async function deleteFeatureFlag(projectId: string, flagId: string): Promise<boolean> {
-  const deleted = await db
+/** Returns the deleted flag, or undefined if the project has no such flag. */
+export async function deleteFeatureFlag(
+  projectId: string,
+  flagId: string,
+): Promise<FeatureFlag | undefined> {
+  const [deleted] = await db
     .delete(featureFlags)
     .where(and(eq(featureFlags.projectId, projectId), eq(featureFlags.id, flagId)))
-    .returning({ id: featureFlags.id });
-  return deleted.length > 0;
+    .returning();
+  return deleted;
 }
 
 /** Lookup by the key the SDK passes, scoped to the project. */
