@@ -54,6 +54,19 @@ flowchart LR
     F --> G[Evaluation controller]
 ```
 
+## L2 Redis cache
+
+L1 is per server, so every server has to fill its own cache and each one hits the database for the same keys. Redis is shared, so once one server has loaded a key, the others get it from Redis instead of the database.
+
+Redis is only a cache, so it must never slow down or break the evaluate endpoint. These are the rules:
+
+- **Best effort:** if Redis is down, slow, or returns a bad value, we treat it as a cache miss and read from the database. Failed writes and deletes are ignored.
+- **Fail fast:** commands have a 200ms timeout and aren't queued while Redis is disconnected, so a dead Redis can't pile up requests. For example, requests in the first few milliseconds after startup go straight to the database.
+- **Validated values:** what we read from Redis is parsed and checked against a schema, so a corrupted or old-shaped value is a miss, not a crash.
+- **Shared with coalescing:** the Redis read is inside the coalescer, so concurrent misses for a key share one Redis read and one database query.
+
+The code is in `apps/api/src/lib/cache`: `RedisCache` is the generic class, `redis.ts` is the client, and `api-key-cache.ts` puts L1, Redis and the database together.
+
 ## Cache schema
 
 **Key**
@@ -66,14 +79,23 @@ It uses the public `apiKeyId`, never the full key, so no secret ends up in Redis
 
 **Value**
 
+Right now only found keys are cached, so an entry is:
+
+```ts
+type ApiKeyCacheEntry = { projectId: string; accountId: string; apiKeyHash: string };
+```
+
+It has everything the verification needs. We still compare the HMAC of the presented key against `apiKeyHash` on every request. That's cheap and in-process, so the cache only replaces the database lookup.
+
+When we add negative caching, the entry gets a `status` field:
+
 ```ts
 type ApiKeyCacheEntry =
   | { status: "active"; projectId: string; accountId: string; apiKeyHash: string }
   | { status: "missing" };
 ```
 
-- `active` has everything the verification needs. We still compare the HMAC of the presented key against `apiKeyHash` on every request. That's cheap and in-process, so the cache only replaces the database lookup.
-- `missing` is for well-formed `apiKeyId`s that aren't in the database. It stops random keys from hitting the database on every request.
+`missing` is for well-formed `apiKeyId`s that aren't in the database. It stops random keys from hitting the database on every request.
 
 In Redis the value is stored as a JSON string.
 
@@ -90,7 +112,7 @@ L1 has a max size (LRU), so a flood of different keys can't grow memory.
 
 When a key is rotated or a project is deleted, we delete the key from Redis and publish the `apiKeyId` on a pub/sub channel so every server evicts it from L1. If that message is missed, a revoked key can still work for at most the L1 TTL (30s). That's the delay we accept.
 
-We'll build this gradually, starting with the L1 and L2 lookup, then negative caching and pub/sub invalidation.
+We're building this gradually. L1, L2 and request coalescing are done. Negative caching and pub/sub invalidation are next.
 
 ## Optimizations
 
@@ -123,5 +145,5 @@ Some things to keep in mind:
 
 - The check and the set on the map must happen with no `await` in between. Otherwise two requests can both think nobody is running a lookup.
 - The map entry must be removed in a `finally`. If the query fails and we don't remove it, every later request for that key gets the same failed promise.
-- Only the database read is shared. Each request still verifies its own key against the hash.
+- Only the Redis read and the database read are shared. Each request still verifies its own key against the hash.
 - If the query fails, everyone waiting gets the error, and the next request tries again.

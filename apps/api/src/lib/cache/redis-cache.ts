@@ -10,7 +10,7 @@ type RedisCacheOptions<V> = {
 };
 
 /**
- * Redis-backed cache (L2), shared by all API servers.
+ * Redis-backed cache, shared by all API servers.
  *
  * Redis is only a cache, so every method is best effort and never throws: a failure (Redis
  * down, timeout, bad value) is a miss on read and a no-op on write and delete.
