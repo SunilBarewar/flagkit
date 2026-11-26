@@ -1,10 +1,11 @@
 import { findProjectByApiKeyId } from "@flagkit/db";
 import { z } from "zod";
 
-import { LRUCache } from "@/lib/cache/lru-cache.ts";
+import { cacheInvalidator } from "@/lib/cache/invalidator.ts";
+import { LRUCache } from "@/lib/cache/primitives/lru-cache.ts";
 import { redis } from "@/lib/cache/redis.ts";
-import { RedisCache } from "@/lib/cache/redis-cache.ts";
-import { TieredCache } from "@/lib/cache/tiered-cache.ts";
+import { RedisCache } from "@/lib/cache/primitives/redis-cache.ts";
+import { TieredCache } from "@/lib/cache/primitives/tiered-cache.ts";
 
 /**
  * Cache for API key lookups, keyed by the public `apiKeyId`, never the full key.
@@ -26,6 +27,8 @@ const L1_MAX_ENTRIES = 10_000;
 const L2_TTL_SECONDS = 10 * 60;
 
 const apiKeyCache = new TieredCache<ApiKeyCacheEntry>({
+  name: "apikey",
+  invalidator: cacheInvalidator,
   l1: new LRUCache(L1_TTL_MS, L1_MAX_ENTRIES),
   l2: new RedisCache(redis, {
     prefix: "apikey",

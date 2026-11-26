@@ -1,8 +1,12 @@
-import type { LRUCache } from "@/lib/cache/lru-cache.ts";
-import type { RedisCache } from "@/lib/cache/redis-cache.ts";
-import { RequestCoalescer } from "@/lib/cache/request-coalescer.ts";
+import type { CacheInvalidator } from "@/lib/cache/primitives/cache-invalidator.ts";
+import type { LRUCache } from "@/lib/cache/primitives/lru-cache.ts";
+import type { RedisCache } from "@/lib/cache/primitives/redis-cache.ts";
+import { RequestCoalescer } from "@/lib/cache/primitives/request-coalescer.ts";
 
 type TieredCacheOptions<V> = {
+  /** Identifies this cache in invalidation messages, so servers evict from the right one. */
+  name: string;
+  invalidator: CacheInvalidator;
   /** In-memory cache on this server. */
   l1: LRUCache<V>;
   /** Redis, shared by all servers. */
@@ -19,7 +23,10 @@ type TieredCacheOptions<V> = {
 export class TieredCache<V> {
   private readonly coalescer = new RequestCoalescer<V | undefined>();
 
-  constructor(private readonly options: TieredCacheOptions<V>) {}
+  constructor(private readonly options: TieredCacheOptions<V>) {
+    // Another server (or this one) invalidated the key, so drop our in-memory copy.
+    options.invalidator.onInvalidate(options.name, (key) => options.l1.delete(key));
+  }
 
   async get(key: string): Promise<V | undefined> {
     const cached = this.options.l1.get(key);
@@ -28,10 +35,14 @@ export class TieredCache<V> {
     return this.coalescer.run(key, () => this.loadMiss(key));
   }
 
-  /** Drops the key from both levels so the next `get` reads from the source. */
+  /**
+   * Drops the key from both levels on every server, so the next `get` reads from the source.
+   * Call it after the change to the source has been committed.
+   */
   async delete(key: string): Promise<void> {
     this.options.l1.delete(key);
     await this.options.l2.delete(key);
+    await this.options.invalidator.publish(this.options.name, key);
   }
 
   private async loadMiss(key: string): Promise<V | undefined> {
