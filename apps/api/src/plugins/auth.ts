@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
 import { hashApiKey, parseApiKeyId, verifyApiKey } from "@/lib/api-key.ts";
+import { apiKeyCache, type ApiKeyCacheEntry } from "@/lib/api-key-cache.ts";
 import { AUTH_COOKIE_NAME } from "@/lib/auth-cookie.ts";
 import { verifyAccountToken } from "@/lib/jwt.ts";
 
@@ -53,14 +54,31 @@ async function verifyApiKeyHeader(
   }
 
   const apiKeyId = parseApiKeyId(apiKey);
-  const project = apiKeyId ? await findProjectByApiKeyId(apiKeyId) : undefined;
-  const valid = verifyApiKey(apiKey, project?.apiKeyHash ?? DUMMY_API_KEY_HASH);
+  const entry = apiKeyId ? await lookupApiKey(apiKeyId) : undefined;
+  const valid = verifyApiKey(apiKey, entry?.apiKeyHash ?? DUMMY_API_KEY_HASH);
 
-  if (!project || !valid) {
+  if (!entry || !valid) {
     throw new UnauthorizedError("Invalid API key", { code: ErrorCode.UNAUTHORIZED });
   }
 
-  return { projectId: project.id, accountId: project.accountId };
+  return { projectId: entry.projectId, accountId: entry.accountId };
+}
+
+/** L1 cache first, then the database. Only found keys are cached. */
+async function lookupApiKey(apiKeyId: string): Promise<ApiKeyCacheEntry | undefined> {
+  const cached = apiKeyCache.get(apiKeyId);
+  if (cached) return cached;
+
+  const project = await findProjectByApiKeyId(apiKeyId);
+  if (!project) return undefined;
+
+  const entry = {
+    projectId: project.id,
+    accountId: project.accountId,
+    apiKeyHash: project.apiKeyHash,
+  };
+  apiKeyCache.set(apiKeyId, entry);
+  return entry;
 }
 
 declare module "fastify" {
