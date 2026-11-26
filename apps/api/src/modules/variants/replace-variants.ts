@@ -11,6 +11,7 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 
 import { protectedErrorResponses, security } from "@/common/responses.ts";
+import { invalidateFlagConfig } from "@/lib/cache/flag-config-cache.ts";
 import { successResponse } from "@/utils/response.ts";
 import { findMultivariateFlag } from "./find-multivariate-flag.ts";
 import { toVariantResponse } from "./mappers.ts";
@@ -37,9 +38,10 @@ export const replaceVariantsRoute: FastifyPluginAsyncZod = async (app) => {
     async (request) => {
       const { projectId, flagId } = request.params;
 
-      await findMultivariateFlag(projectId, flagId);
+      const flag = await findMultivariateFlag(projectId, flagId);
 
       const variants = await replaceFlagVariants(flagId, request.body.variants);
+      await invalidateFlagConfig(projectId, flag.key);
 
       return successResponse("Variants saved", variants.map(toVariantResponse));
     },

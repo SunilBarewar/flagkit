@@ -1,4 +1,3 @@
-import { findFeatureFlagByKey, listFlagVariants, listRulesWithConditions } from "@flagkit/db";
 import { ErrorCode, HttpStatus, NotFoundError } from "@flagkit/shared";
 import {
   ApiErrorResponse,
@@ -10,6 +9,7 @@ import {
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { apiKeySecurity } from "@/common/responses.ts";
+import { lookupFlagConfig } from "@/lib/cache/flag-config-cache.ts";
 import { successResponse } from "@/utils/response.ts";
 import { evaluateFlag } from "./evaluate.ts";
 
@@ -34,18 +34,16 @@ export const evaluateFlagRoute: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => {
-      const flag = await findFeatureFlagByKey(request.projectId, request.params.flagKey);
+      const config = await lookupFlagConfig(request.projectId, request.params.flagKey);
 
-      if (!flag) {
+      if (!config) {
         throw new NotFoundError("Flag not found", { code: ErrorCode.NOT_FOUND });
       }
 
-      const [rules, variants] = await Promise.all([
-        listRulesWithConditions(flag.id),
-        flag.type === "multivariate" ? listFlagVariants(flag.id) : [],
-      ]);
-
-      return successResponse("Flag evaluated", evaluateFlag(flag, rules, request.body, variants));
+      return successResponse(
+        "Flag evaluated",
+        evaluateFlag(config.flag, config.rules, request.body, config.variants),
+      );
     },
   );
 };

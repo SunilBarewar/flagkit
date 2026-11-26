@@ -10,6 +10,7 @@ import {
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { protectedErrorResponses, security } from "@/common/responses.ts";
+import { invalidateFlagConfig } from "@/lib/cache/flag-config-cache.ts";
 import { successResponse } from "@/utils/response.ts";
 import { toFlagResponse } from "./mappers.ts";
 
@@ -39,6 +40,8 @@ export const updateFlagRoute: FastifyPluginAsyncZod = async (app) => {
       if (!flag) {
         throw new NotFoundError("Flag not found", { code: ErrorCode.NOT_FOUND });
       }
+
+      await invalidateFlagConfig(projectId, flag.key);
 
       return successResponse("Flag updated", toFlagResponse(flag));
     },

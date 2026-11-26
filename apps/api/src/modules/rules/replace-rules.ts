@@ -11,6 +11,7 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 
 import { protectedErrorResponses, security } from "@/common/responses.ts";
+import { invalidateFlagConfig } from "@/lib/cache/flag-config-cache.ts";
 import { successResponse } from "@/utils/response.ts";
 import { toRuleResponse } from "./mappers.ts";
 import { assertRulesFitFlag } from "./validate-rules.ts";
@@ -51,6 +52,7 @@ export const replaceRulesRoute: FastifyPluginAsyncZod = async (app) => {
       );
 
       const saved = await replaceFlagRules(flagId, rules);
+      await invalidateFlagConfig(projectId, flag.key);
 
       return successResponse("Rules saved", saved.map(toRuleResponse));
     },
