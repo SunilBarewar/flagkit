@@ -35,12 +35,15 @@ async function getAccountId(request: FastifyRequest): Promise<string> {
 }
 
 /**
- * Verifies the `x-api-key` header and returns the id of the project it belongs to.
+ * Verifies the `x-api-key` header and returns the ids of the project it belongs to
+ * and the account that owns that project.
  * Throws UnauthorizedError (-> 401) if the header is missing or the key is wrong.
  * Malformed, unknown and mismatched keys all get the same error, so a caller can't
  * tell which part was wrong.
  */
-async function getProjectId(request: FastifyRequest): Promise<string> {
+async function verifyApiKeyHeader(
+  request: FastifyRequest,
+): Promise<{ projectId: string; accountId: string }> {
   const apiKey = request.headers[API_KEY_HEADER];
 
   if (typeof apiKey !== "string" || apiKey === "") {
@@ -57,12 +60,12 @@ async function getProjectId(request: FastifyRequest): Promise<string> {
     throw new UnauthorizedError("Invalid API key", { code: ErrorCode.UNAUTHORIZED });
   }
 
-  return project.id;
+  return { projectId: project.id, accountId: project.accountId };
 }
 
 declare module "fastify" {
   interface FastifyRequest {
-    /** Set by `app.authenticate`; only defined on routes that run that hook. */
+    /** Set by `app.authenticate` or `app.authenticateApiKey`; only defined on routes that run one of those hooks. */
     accountId: string;
     /** Set by `app.authenticateApiKey`; only defined on routes that run that hook. */
     projectId: string;
@@ -85,6 +88,8 @@ export const registerAuth = fp(async (app: FastifyInstance) => {
   });
 
   app.decorate("authenticateApiKey", async (request: FastifyRequest) => {
-    request.projectId = await getProjectId(request);
+    const { projectId, accountId } = await verifyApiKeyHeader(request);
+    request.projectId = projectId;
+    request.accountId = accountId;
   });
 });
