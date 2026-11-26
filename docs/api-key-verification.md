@@ -91,3 +91,37 @@ L1 has a max size (LRU), so a flood of different keys can't grow memory.
 When a key is rotated or a project is deleted, we delete the key from Redis and publish the `apiKeyId` on a pub/sub channel so every server evicts it from L1. If that message is missed, a revoked key can still work for at most the L1 TTL (30s). That's the delay we accept.
 
 We'll build this gradually, starting with the L1 and L2 lookup, then negative caching and pub/sub invalidation.
+
+## Optimizations
+
+### Request coalescing for concurrent misses
+
+**Problem**
+
+The cache only helps after the first request has filled it. If a key isn't cached and many requests for it arrive at the same time (cold start, or right after the TTL expires), all of them miss and all of them query the database. At 10K requests per second that can be hundreds of identical queries for one key.
+
+**Solution**
+
+Request coalescing. We keep a map of lookups that are currently running, one per `apiKeyId`. On a cache miss:
+
+1. If a lookup for this `apiKeyId` is already running, wait for it and use its result.
+2. If not, start the database query and put its promise in the map.
+3. When the query finishes, remove it from the map, whether it succeeded or failed.
+
+So all the concurrent requests share one query.
+
+```mermaid
+flowchart LR
+    A[Cache miss] --> B{Lookup already running?}
+    B -- yes --> C[Wait for its result]
+    B -- no --> D[(Query database)]
+    D --> E[Save to cache]
+    E --> C
+```
+
+Some things to keep in mind:
+
+- The check and the set on the map must happen with no `await` in between. Otherwise two requests can both think nobody is running a lookup.
+- The map entry must be removed in a `finally`. If the query fails and we don't remove it, every later request for that key gets the same failed promise.
+- Only the database read is shared. Each request still verifies its own key against the hash.
+- If the query fails, everyone waiting gets the error, and the next request tries again.
