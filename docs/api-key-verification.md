@@ -53,3 +53,41 @@ flowchart LR
     D -- save to L1 and L2 --> F
     F --> G[Evaluation controller]
 ```
+
+## Cache schema
+
+**Key**
+
+```
+apikey:<apiKeyId>
+```
+
+It uses the public `apiKeyId`, never the full key, so no secret ends up in Redis keys or logs. L1 and L2 use the same key.
+
+**Value**
+
+```ts
+type ApiKeyCacheEntry =
+  | { status: "active"; projectId: string; accountId: string; apiKeyHash: string }
+  | { status: "missing" };
+```
+
+- `active` has everything the verification needs. We still compare the HMAC of the presented key against `apiKeyHash` on every request. That's cheap and in-process, so the cache only replaces the database lookup.
+- `missing` is for well-formed `apiKeyId`s that aren't in the database. It stops random keys from hitting the database on every request.
+
+In Redis the value is stored as a JSON string.
+
+**TTLs**
+
+| Entry     | L1 (memory) | L2 (Redis) |
+| --------- | ----------- | ---------- |
+| `active`  | 30s         | 10 min     |
+| `missing` | 10s         | 30s        |
+
+L1 has a max size (LRU), so a flood of different keys can't grow memory.
+
+**Revocation**
+
+When a key is rotated or a project is deleted, we delete the key from Redis and publish the `apiKeyId` on a pub/sub channel so every server evicts it from L1. If that message is missed, a revoked key can still work for at most the L1 TTL (30s). That's the delay we accept.
+
+We'll build this gradually, starting with the L1 and L2 lookup, then negative caching and pub/sub invalidation.
