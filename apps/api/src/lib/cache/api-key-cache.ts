@@ -1,6 +1,7 @@
 import { findProjectByApiKeyId } from "@flagkit/db";
 
 import { LRUCache } from "@/lib/cache/lru-cache.ts";
+import { RequestCoalescer } from "@/lib/cache/request-coalescer.ts";
 
 /**
  * L1 cache for API key lookups, keyed by the public `apiKeyId`, never the full key.
@@ -20,8 +21,7 @@ const MAX_ENTRIES = 10_000;
 
 const apiKeyCache = new LRUCache<ApiKeyCacheEntry>(TTL_MS, MAX_ENTRIES);
 
-// Database reads that are running right now. Concurrent misses for the same key share one.
-const inFlight = new Map<string, Promise<ApiKeyCacheEntry | undefined>>();
+const coalescer = new RequestCoalescer<ApiKeyCacheEntry | undefined>();
 
 async function loadFromDatabase(apiKeyId: string): Promise<ApiKeyCacheEntry | undefined> {
   const project = await findProjectByApiKeyId(apiKeyId);
@@ -44,14 +44,7 @@ export async function lookupApiKey(apiKeyId: string): Promise<ApiKeyCacheEntry |
   const cached = apiKeyCache.get(apiKeyId);
   if (cached) return cached;
 
-  // No `await` between the check and the set below, so two requests can't both start a query.
-  const pending = inFlight.get(apiKeyId);
-  if (pending) return pending;
-
-  // Removed on success and on failure, so a failed query isn't handed to later requests.
-  const promise = loadFromDatabase(apiKeyId).finally(() => inFlight.delete(apiKeyId));
-  inFlight.set(apiKeyId, promise);
-  return promise;
+  return coalescer.run(apiKeyId, () => loadFromDatabase(apiKeyId));
 }
 
 /** Drops an entry so the next request reads from the database. */
