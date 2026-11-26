@@ -5,6 +5,7 @@ const schema = z.object({
   HOST: z.string().default("127.0.0.1"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   DATABASE_URL: z.string().min(1),
+  REDIS_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32),
   API_KEY_PEPPER: z.string().min(32),
   // Comma-separated list of browser origins allowed to call the API, e.g. "http://localhost:3000".

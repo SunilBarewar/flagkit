@@ -2,12 +2,14 @@ import { closeDatabase } from "@flagkit/db";
 
 import { buildApp } from "@/app.ts";
 import { Config } from "@/env.ts";
+import { closeRedis } from "@/lib/cache/redis.ts";
 
 const app = buildApp();
 
 async function shutdown(signal: string) {
   app.log.info({ signal }, "shutting down");
   await app.close();
+  await closeRedis();
   await closeDatabase();
   process.exit(0);
 }
