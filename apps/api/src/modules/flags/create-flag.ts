@@ -11,6 +11,7 @@ import {
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
 import { protectedErrorResponses, security } from "@/common/responses.ts";
+import { invalidateFlagConfig } from "@/lib/cache/flag-config-cache.ts";
 import { successResponse } from "@/utils/response.ts";
 import { assertRulesFitFlag } from "../rules/validate-rules.ts";
 import { toFlagResponse } from "./mappers.ts";
@@ -51,6 +52,9 @@ export const createFlagRoute: FastifyPluginAsyncZod = async (app) => {
         body.type === "multivariate"
           ? await insertMultivariateFeatureFlag({ ...body, projectId }, body.variants, rules)
           : { ...(await insertFeatureFlag({ ...body, projectId }, rules)), variants: undefined };
+
+      // Clears a cached "missing" entry, so evaluating the new flag works right away.
+      await invalidateFlagConfig(projectId, created.flag.key);
 
       return reply
         .code(HttpStatus.CREATED)
