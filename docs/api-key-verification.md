@@ -87,11 +87,11 @@ type ApiKeyCacheEntry = { projectId: string; accountId: string; apiKeyHash: stri
 
 It has everything the verification needs. We still compare the HMAC of the presented key against `apiKeyHash` on every request. That's cheap and in-process, so the cache only replaces the database lookup.
 
-When we add negative caching, the entry gets a `status` field:
+Every entry has a `status` field (negative caching):
 
 ```ts
-type ApiKeyCacheEntry =
-  | { status: "active"; projectId: string; accountId: string; apiKeyHash: string }
+type CacheEntry =
+  | { status: "active"; value: { projectId: string; accountId: string; apiKeyHash: string } }
   | { status: "missing" };
 ```
 
@@ -112,7 +112,7 @@ L1 has a max size (LRU), so a flood of different keys can't grow memory.
 
 When a key is rotated or a project is deleted, we delete the key from Redis and publish the `apiKeyId` on a pub/sub channel so every server evicts it from L1. If that message is missed, a revoked key can still work for at most the L1 TTL (30s). That's the delay we accept.
 
-We're building this gradually. L1, L2 and request coalescing are done. Negative caching and pub/sub invalidation are next.
+We're building this gradually. L1, L2, request coalescing, pub/sub invalidation and negative caching are done.
 
 ## Optimizations
 
@@ -147,3 +147,29 @@ Some things to keep in mind:
 - The map entry must be removed in a `finally`. If the query fails and we don't remove it, every later request for that key gets the same failed promise.
 - Only the Redis read and the database read are shared. Each request still verifies its own key against the hash.
 - If the query fails, everyone waiting gets the error, and the next request tries again.
+
+### Negative caching for unknown keys
+
+**Problem**
+
+The cache only stores keys that exist. If a request comes with a key that isn't in the database (a typo, a deleted project, someone guessing), every one of those requests misses the cache and queries the database, and then gets a 401. An attacker can send random keys all day, and each one costs us a database query.
+
+**Solution**
+
+We also cache the fact that a key doesn't exist. When the lookup finds nothing, we store a `{ status: "missing" }` entry instead of skipping the cache. The next request with the same `apiKeyId` gets "not found" from the cache and never reaches the database.
+
+```mermaid
+flowchart LR
+    A[Cache miss] --> B[(Query database)]
+    B --> C{Found?}
+    C -- yes --> D["Save active entry<br/>L1 30s, L2 10 min"]
+    C -- no --> E["Save missing entry<br/>L1 10s, L2 30s"]
+```
+
+Some things to keep in mind:
+
+- `missing` entries have a short TTL. If a key is valid a moment later, we don't want to keep rejecting it for long.
+- Nothing needs to invalidate a `missing` entry for API keys. The `apiKeyId` is random, so nobody can look up a key before it exists.
+- Random keys can't grow memory forever, because L1 is an LRU with a max size. They only push out old entries.
+- A `missing` entry means the key is unknown. The key is still compared against the hash on every request, same as before, and the response is the same 401 as for a wrong key.
+- Old Redis entries without a `status` fail the schema check, so they count as a miss and get rewritten in the new shape.

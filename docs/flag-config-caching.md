@@ -112,7 +112,7 @@ Applications might repeatedly evaluate flags that have been deleted or that cont
 
 To avoid this, we'll also cache missing flags.
 
-Instead of storing a full configuration, we'll store a special `missing` entry with a short TTL.
+Instead of storing a full configuration, we store a special `{ status: "missing" }` entry with a short TTL.
 
 When a new flag is created, we'll invalidate its cache key. This ensures that a previously missing flag can be found immediately after creation.
 
