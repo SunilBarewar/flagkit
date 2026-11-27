@@ -1,15 +1,9 @@
 import { findProjectByApiKeyId } from "@flagkit/db";
 import { z } from "zod";
 
+import { createL1, createL2 } from "@/lib/cache/create-stores.ts";
 import { cacheInvalidator } from "@/lib/cache/invalidator.ts";
-import { LRUCache } from "@/lib/cache/primitives/lru-cache.ts";
-import { redis } from "@/lib/cache/redis.ts";
-import { RedisCache } from "@/lib/cache/primitives/redis-cache.ts";
-import {
-  TieredCache,
-  cacheEntrySchema,
-  type CacheEntry,
-} from "@/lib/cache/primitives/tiered-cache.ts";
+import { TieredCache, cacheEntrySchema } from "@/lib/cache/primitives/tiered-cache.ts";
 
 /**
  * Cache for API key lookups, keyed by the public `apiKeyId`, never the full key.
@@ -36,8 +30,8 @@ const MISSING_L2_TTL_SECONDS = 30;
 const apiKeyCache = new TieredCache<ApiKeyCacheEntry>({
   name: "apikey",
   invalidator: cacheInvalidator,
-  l1: new LRUCache<CacheEntry<ApiKeyCacheEntry>>(L1_TTL_MS, L1_MAX_ENTRIES),
-  l2: new RedisCache(redis, {
+  l1: createL1(L1_TTL_MS, L1_MAX_ENTRIES),
+  l2: createL2({
     prefix: "apikey",
     ttlSeconds: L2_TTL_SECONDS,
     schema: cacheEntrySchema(ApiKeyCacheEntrySchema),
