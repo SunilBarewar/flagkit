@@ -5,7 +5,11 @@ import { z } from "zod";
 import { cacheInvalidator } from "@/lib/cache/invalidator.ts";
 import { LRUCache } from "@/lib/cache/primitives/lru-cache.ts";
 import { RedisCache } from "@/lib/cache/primitives/redis-cache.ts";
-import { TieredCache } from "@/lib/cache/primitives/tiered-cache.ts";
+import {
+  TieredCache,
+  cacheEntrySchema,
+  type CacheEntry,
+} from "@/lib/cache/primitives/tiered-cache.ts";
 import { redis } from "@/lib/cache/redis.ts";
 
 /**
@@ -53,6 +57,9 @@ export type FlagConfig = z.infer<typeof FlagConfigSchema>;
 const L1_TTL_MS = 10_000;
 const L1_MAX_ENTRIES = 5_000;
 const L2_TTL_SECONDS = 5 * 60;
+// Short, so a flag that gets created isn't reported missing for long if its invalidation is missed.
+const MISSING_L1_TTL_MS = 10_000;
+const MISSING_L2_TTL_SECONDS = 30;
 
 const cacheKey = (projectId: string, flagKey: string) => `${projectId}:${flagKey}`;
 
@@ -93,12 +100,13 @@ async function loadFlagConfig(key: string): Promise<FlagConfig | undefined> {
 const flagConfigCache = new TieredCache<FlagConfig>({
   name: "flag",
   invalidator: cacheInvalidator,
-  l1: new LRUCache(L1_TTL_MS, L1_MAX_ENTRIES),
+  l1: new LRUCache<CacheEntry<FlagConfig>>(L1_TTL_MS, L1_MAX_ENTRIES),
   l2: new RedisCache(redis, {
     prefix: "flag",
     ttlSeconds: L2_TTL_SECONDS,
-    schema: FlagConfigSchema,
+    schema: cacheEntrySchema(FlagConfigSchema),
   }),
+  missingTtl: { l1Ms: MISSING_L1_TTL_MS, l2Seconds: MISSING_L2_TTL_SECONDS },
   load: loadFlagConfig,
 });
 
@@ -112,7 +120,7 @@ export function lookupFlagConfig(
 
 /**
  * Call after anything that changes what the evaluate endpoint returns for the flag (its
- * switch, rules, variants, or deleting it), once the change is committed.
+ * switch, rules, variants, creating it or deleting it), once the change is committed.
  */
 export function invalidateFlagConfig(projectId: string, flagKey: string): Promise<void> {
   return flagConfigCache.delete(cacheKey(projectId, flagKey));

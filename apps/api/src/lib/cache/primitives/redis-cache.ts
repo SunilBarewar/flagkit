@@ -31,14 +31,10 @@ export class RedisCache<V> {
     }
   }
 
-  async set(key: string, value: V): Promise<void> {
+  /** `ttlSeconds` overrides the default TTL for this entry. */
+  async set(key: string, value: V, ttlSeconds: number = this.options.ttlSeconds): Promise<void> {
     try {
-      await this.redis.set(
-        this.redisKey(key),
-        JSON.stringify(value),
-        "EX",
-        this.options.ttlSeconds,
-      );
+      await this.redis.set(this.redisKey(key), JSON.stringify(value), "EX", ttlSeconds);
     } catch {
       // Not cached in Redis, the next miss reads the source again.
     }
