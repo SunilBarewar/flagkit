@@ -1,9 +1,7 @@
 import { z } from "zod";
 
-import type { CacheInvalidator } from "@/lib/cache/primitives/cache-invalidator.ts";
-import type { LRUCache } from "@/lib/cache/primitives/lru-cache.ts";
-import type { RedisCache } from "@/lib/cache/primitives/redis-cache.ts";
 import { RequestCoalescer } from "@/lib/cache/primitives/request-coalescer.ts";
+import type { Invalidator, L1Store, L2Store } from "@/lib/cache/primitives/stores.ts";
 
 /**
  * What the two levels store. `missing` means the source has no such key, so lookups for it
@@ -22,11 +20,12 @@ export function cacheEntrySchema<V>(valueSchema: z.ZodType<V>): z.ZodType<CacheE
 type TieredCacheOptions<V> = {
   /** Identifies this cache in invalidation messages, so servers evict from the right one. */
   name: string;
-  invalidator: CacheInvalidator;
+  /** Clears L1 on the other servers. */
+  invalidator: Invalidator;
   /** In-memory cache on this server. */
-  l1: LRUCache<CacheEntry<V>>;
+  l1: L1Store<CacheEntry<V>>;
   /** Redis, shared by all servers. */
-  l2: RedisCache<CacheEntry<V>>;
+  l2: L2Store<CacheEntry<V>>;
   /** Reads the source of truth (the database). Returns undefined if the key doesn't exist. */
   load: (key: string) => Promise<V | undefined>;
   /**
@@ -38,7 +37,7 @@ type TieredCacheOptions<V> = {
 
 /**
  * Read-through cache: L1 (memory), then L2 (Redis), then `load`. Keys that don't exist are
- * cached too, with a short TTL.
+ * cached too, with a short TTL. A level that is turned off is passed as a no-op store.
  *
  * Concurrent misses for the same key share a single L2 read and `load` call.
  */

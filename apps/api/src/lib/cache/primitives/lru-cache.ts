@@ -1,3 +1,5 @@
+import type { L1Store } from "@/lib/cache/primitives/stores.ts";
+
 type Stored<V> = { value: V; expiresAt: number };
 
 /**
@@ -6,7 +8,7 @@ type Stored<V> = { value: V; expiresAt: number };
  * A Map iterates in insertion order, so the first key is always the least recently used.
  * Reading or writing a key re-inserts it to move it to the end.
  */
-export class LRUCache<V> {
+export class LRUCache<V> implements L1Store<V> {
   private readonly store = new Map<string, Stored<V>>();
 
   constructor(

@@ -1,7 +1,9 @@
 import type { Redis } from "ioredis";
 import type { z } from "zod";
 
-type RedisCacheOptions<V> = {
+import type { L2Store } from "@/lib/cache/primitives/stores.ts";
+
+export type RedisCacheOptions<V> = {
   /** Keys are stored as `<prefix>:<key>`. */
   prefix: string;
   ttlSeconds: number;
@@ -15,7 +17,7 @@ type RedisCacheOptions<V> = {
  * Redis is only a cache, so every method is best effort and never throws: a failure (Redis
  * down, timeout, bad value) is a miss on read and a no-op on write and delete.
  */
-export class RedisCache<V> {
+export class RedisCache<V> implements L2Store<V> {
   constructor(
     private readonly redis: Redis,
     private readonly options: RedisCacheOptions<V>,

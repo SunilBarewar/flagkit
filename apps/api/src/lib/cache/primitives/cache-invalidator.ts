@@ -1,6 +1,8 @@
 import type { Redis } from "ioredis";
 import { z } from "zod";
 
+import type { Invalidator } from "@/lib/cache/primitives/stores.ts";
+
 const CHANNEL = "cache-invalidation";
 
 const MessageSchema = z.object({ cache: z.string(), key: z.string() });
@@ -13,7 +15,7 @@ type InvalidateHandler = (key: string) => void;
  * Messages are best effort. A server that misses one (disconnected, restarting) keeps the stale
  * entry until its L1 TTL expires, so the TTL is the upper bound on staleness.
  */
-export class CacheInvalidator {
+export class CacheInvalidator implements Invalidator {
   private readonly handlers = new Map<string, Set<InvalidateHandler>>();
 
   constructor(
